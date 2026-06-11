@@ -71,7 +71,7 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
         return {"debts": [], "total_months": 0, "total_interest": 0.0, "strategy": strategy}
     ordered = sorted(debts, key=lambda d: float(d.balance)) if strategy == "snowball" else sorted(debts, key=lambda d: float(d.interest_rate), reverse=True)
     balances = {d.id: float(d.balance) for d in ordered}
-    rates = {d.id: float(d.interest_rate) / 12 for d in ordered}
+    rates = {d.id: float(d.interest_rate) / 100 / 12 for d in ordered}
     mins = {d.id: float(d.minimum_payment) for d in ordered}
     payoff_month: dict[str, int] = {}
     total_interest = 0.0
@@ -93,13 +93,17 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
             if balances[d.id] <= 0:
                 freed += mins[d.id] - pay
                 payoff_month[d.id] = month
+        remaining_extra = available + freed
         for d in ordered:
-            if balances[d.id] > 0:
-                extra_apply = min(available + freed, balances[d.id])
-                balances[d.id] -= extra_apply
-                if balances[d.id] <= 0:
-                    payoff_month[d.id] = month
+            if remaining_extra <= 0:
                 break
+            if balances[d.id] <= 0:
+                continue
+            extra_apply = min(remaining_extra, balances[d.id])
+            balances[d.id] -= extra_apply
+            remaining_extra -= extra_apply
+            if balances[d.id] <= 0:
+                payoff_month[d.id] = month
     plan = [{"id": str(d.id), "name": d.name, "balance": float(d.balance), "minimum_payment": float(d.minimum_payment),
               "interest_rate": float(d.interest_rate), "payoff_month": payoff_month.get(d.id, max_months)} for d in ordered]
     return {"debts": plan, "total_months": month, "total_interest": round(total_interest, 2), "strategy": strategy}
