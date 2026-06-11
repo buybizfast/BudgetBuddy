@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+* { box-sizing: border-box; }
+body { background-color: #f8fafc; color: #0f172a; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }

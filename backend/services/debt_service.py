@@ -1,0 +1,113 @@
+"""Debt snowball / avalanche tracker service."""
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from backend.db.models import DebtAccount, DebtPayment
+
+
+async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
+    result = await db.execute(
+        select(DebtAccount).options(selectinload(DebtAccount.payments))
+        .order_by(DebtAccount.sort_order, DebtAccount.created_at)
+    )
+    return [_serialize(d) for d in result.scalars().all()]
+
+
+async def create_debt(name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
+    last = result.scalar_one_or_none()
+    sort_order = (last.sort_order + 1) if last else 0
+    debt = DebtAccount(name=name, balance=Decimal(str(balance)), minimum_payment=Decimal(str(minimum_payment)),
+                       interest_rate=Decimal(str(interest_rate)), sort_order=sort_order)
+    db.add(debt)
+    await db.commit()
+    await db.refresh(debt)
+    return _serialize(debt)
+
+
+async def update_debt(debt_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
+    debt = result.scalar_one()
+    if name is not None: debt.name = name
+    if balance is not None: debt.balance = Decimal(str(balance))
+    if minimum_payment is not None: debt.minimum_payment = Decimal(str(minimum_payment))
+    if interest_rate is not None: debt.interest_rate = Decimal(str(interest_rate))
+    await db.commit()
+    await db.refresh(debt)
+    return _serialize(debt)
+
+
+async def delete_debt(debt_id: str, db: AsyncSession) -> None:
+    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
+    await db.delete(result.scalar_one())
+    await db.commit()
+
+
+async def add_payment(debt_id: str, amount: float, paid_on: date, note: str | None, db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
+    debt = result.scalar_one()
+    payment = DebtPayment(debt_id=debt_id, amount=Decimal(str(amount)), paid_on=paid_on, note=note)
+    db.add(payment)
+    new_balance = max(float(debt.balance) - amount, 0)
+    debt.balance = Decimal(str(new_balance))
+    if new_balance <= 0:
+        debt.is_paid_off = True
+    await db.commit()
+    await db.refresh(payment)
+    return {"id": str(payment.id), "amount": amount, "paid_on": paid_on.isoformat(), "note": note}
+
+
+async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False).order_by(DebtAccount.sort_order))
+    debts = list(result.scalars().all())
+    if not debts:
+        return {"debts": [], "total_months": 0, "total_interest": 0.0, "strategy": strategy}
+    ordered = sorted(debts, key=lambda d: float(d.balance)) if strategy == "snowball" else sorted(debts, key=lambda d: float(d.interest_rate), reverse=True)
+    balances = {d.id: float(d.balance) for d in ordered}
+    rates = {d.id: float(d.interest_rate) / 12 for d in ordered}
+    mins = {d.id: float(d.minimum_payment) for d in ordered}
+    payoff_month: dict[str, int] = {}
+    total_interest = 0.0
+    month = 0
+    max_months = 600
+    while any(balances[d.id] > 0.01 for d in ordered) and month < max_months:
+        month += 1
+        freed = 0.0
+        for d in ordered:
+            if balances[d.id] <= 0: continue
+            interest = balances[d.id] * rates[d.id]
+            total_interest += interest
+            balances[d.id] += interest
+        available = extra_monthly
+        for d in ordered:
+            if balances[d.id] <= 0: continue
+            pay = min(mins[d.id], balances[d.id])
+            balances[d.id] -= pay
+            if balances[d.id] <= 0:
+                freed += mins[d.id] - pay
+                payoff_month[d.id] = month
+        for d in ordered:
+            if balances[d.id] > 0:
+                extra_apply = min(available + freed, balances[d.id])
+                balances[d.id] -= extra_apply
+                if balances[d.id] <= 0:
+                    payoff_month[d.id] = month
+                break
+    plan = [{"id": str(d.id), "name": d.name, "balance": float(d.balance), "minimum_payment": float(d.minimum_payment),
+              "interest_rate": float(d.interest_rate), "payoff_month": payoff_month.get(d.id, max_months)} for d in ordered]
+    return {"debts": plan, "total_months": month, "total_interest": round(total_interest, 2), "strategy": strategy}
+
+
+def _serialize(debt: DebtAccount) -> dict[str, Any]:
+    total_paid = sum(float(p.amount) for p in debt.payments) if debt.payments else 0
+    return {"id": str(debt.id), "name": debt.name, "balance": float(debt.balance),
+            "minimum_payment": float(debt.minimum_payment), "interest_rate": float(debt.interest_rate),
+            "sort_order": debt.sort_order, "is_paid_off": debt.is_paid_off, "total_paid": total_paid,
+            "payments": [{"id": str(p.id), "amount": float(p.amount), "paid_on": p.paid_on.isoformat(), "note": p.note} for p in (debt.payments or [])]}
