@@ -92,8 +92,8 @@ export default function TransactionsPage() {
   }
 
   const filtered = filter === 'unassigned' ? transactions.filter(t => !t.category_id) : transactions
-  const totalSpent = filtered.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0)
-  const totalIncome = filtered.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)
+  const totalSpent = filtered.filter(t => t.amount > 0 && !t.pending).reduce((s, t) => s + t.amount, 0)
+  const totalIncome = filtered.filter(t => t.amount < 0 && !t.pending).reduce((s, t) => s + Math.abs(t.amount), 0)
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
