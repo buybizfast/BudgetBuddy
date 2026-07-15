@@ -6,11 +6,13 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import CORS_ORIGINS, BUDGET_SYNC_INTERVAL_SECS, PLAID_CLIENT_ID
+from api.auth import get_current_user
 from api.routes import budget, plaid, debt, goals, spending_analytics, ws
+from api.routes import auth as auth_router
 from api.routes import subscriptions as subscriptions_router
 from api.routes import spending_alerts as alerts_router
 from api.ws_manager import ws_manager
@@ -59,14 +61,17 @@ app = FastAPI(title="Budget Buddy", description="Dave Ramsey-style zero-based bu
 
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-app.include_router(budget.router)
-app.include_router(plaid.router)
-app.include_router(debt.router)
-app.include_router(goals.router)
-app.include_router(spending_analytics.router)
-app.include_router(ws.router)
-app.include_router(subscriptions_router.router)
-app.include_router(alerts_router.router)
+app.include_router(auth_router.router)
+
+_protected = {"dependencies": [Depends(get_current_user)]}
+app.include_router(budget.router, **_protected)
+app.include_router(plaid.router, **_protected)
+app.include_router(debt.router, **_protected)
+app.include_router(goals.router, **_protected)
+app.include_router(spending_analytics.router, **_protected)
+app.include_router(ws.router)  # WebSocket auth handled separately
+app.include_router(subscriptions_router.router, **_protected)
+app.include_router(alerts_router.router, **_protected)
 
 @app.get("/", tags=["health"])
 async def health():

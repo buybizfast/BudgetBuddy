@@ -4,7 +4,7 @@ import { RefreshCw, Loader2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+import { apiFetch, BASE } from '@/lib/api'
 
 interface Subscription {
   merchant: string
@@ -112,9 +112,7 @@ export default function SubscriptionsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${BASE}/api/v1/subscriptions/`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const data = await apiFetch<any[]>(`/api/v1/subscriptions/`)
       setSubs(data)
     } catch (e) {
       setError('Failed to load subscriptions. Is the API running?')
@@ -129,12 +127,10 @@ export default function SubscriptionsPage() {
   const updateStatus = async (merchant: string, newStatus: string) => {
     setUpdatingMerchant(merchant)
     try {
-      const res = await fetch(`${BASE}/api/v1/subscriptions/${encodeURIComponent(merchant)}`, {
+      await apiFetch(`/api/v1/subscriptions/${encodeURIComponent(merchant)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
-      if (!res.ok) throw new Error()
       setSubs(prev => prev.map(s => s.merchant === merchant ? { ...s, status: newStatus } : s))
     } catch {
       // silently keep old state

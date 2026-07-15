@@ -1,7 +1,9 @@
 'use client'
 import Link from 'next/link'
-import { PiggyBank, Receipt, Building2, Target, CreditCard, CalendarDays, RefreshCw, BarChart2, ChevronRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { PiggyBank, Receipt, Building2, Target, CreditCard, CalendarDays, RefreshCw, BarChart2, ChevronRight, LogOut } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { clearToken } from '@/lib/auth'
 
 const quickLinks = [
   { href: '/budget',        label: 'Budget',        icon: PiggyBank,    color: 'bg-blue-50 text-blue-600' },
@@ -17,15 +19,28 @@ const quickLinks = [
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 export default function TodayPage() {
+  const router = useRouter()
   const now = new Date()
   const hour = now.getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+
+  function logout() {
+    clearToken()
+    router.push('/login')
+  }
 
   return (
     <div>
       <PageHeader
         title={<>{greeting}! 👋</>}
         subtitle={`${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`}
+        right={
+          <button onClick={logout} aria-label="Sign out"
+            className="flex items-center gap-1.5 text-blue-200 hover:text-white text-xs font-medium transition-colors">
+            <LogOut size={15} />
+            Sign out
+          </button>
+        }
       />
 
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-5">

@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+import { apiFetch, BASE } from '@/lib/api'
 
 interface Subscription {
   merchant: string
@@ -131,9 +131,7 @@ export default function CalendarPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${BASE}/api/v1/subscriptions/`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: Subscription[] = await res.json()
+      const data = await apiFetch<Subscription[]>(`/api/v1/subscriptions/`)
       setSubs(data)
     } catch {
       setError('Failed to load subscriptions. Is the API running?')

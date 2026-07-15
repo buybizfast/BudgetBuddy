@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Loader2, Receipt, Filter } from 'lucide-reac
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+import { apiFetch, BASE } from '@/lib/api'
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -50,11 +50,11 @@ export default function TransactionsPage() {
     setLoading(true)
     try {
       const [txRes, budgetRes] = await Promise.all([
-        fetch(`${BASE}/api/v1/budget/transactions?year=${year}&month=${month}`),
-        fetch(`${BASE}/api/v1/budget/month/${year}/${month}`)
+        apiFetch<any>(`/api/v1/budget/transactions?year=${year}&month=${month}`),
+        apiFetch<any>(`/api/v1/budget/month/${year}/${month}`)
       ])
-      const txData = await txRes.json()
-      const budgetData = await budgetRes.json()
+      const txData = txRes
+      const budgetData = budgetRes
       const rawTransactions = Array.isArray(txData) ? txData : txData.transactions ?? []
       const cats: { id: string; name: string }[] = []
       const categoryList: Category[] = []
@@ -78,7 +78,7 @@ export default function TransactionsPage() {
   const assignCategory = async (txId: string, categoryId: string) => {
     setUpdatingId(txId)
     try {
-      await fetch(`${BASE}/api/v1/budget/transactions/${txId}/category`, {
+      await apiFetch(`/api/v1/budget/transactions/${txId}/category`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ budget_category_id: categoryId || null })

@@ -4,7 +4,7 @@ import { CreditCard, Plus, Trash2, ChevronDown, ChevronUp, Loader2, Calculator, 
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+import { apiFetch, BASE } from '@/lib/api'
 
 interface Debt {
   id: string; name: string; balance: number; total_paid: number
@@ -40,8 +40,8 @@ export default function DebtPage() {
   const fetchDebts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/api/v1/debt/`)
-      setDebts(await res.json())
+      const res = await apiFetch<any[]>(`/api/v1/debt/`)
+      setDebts(res)
     } catch { setDebts([]) } finally { setLoading(false) }
   }, [])
 
@@ -50,8 +50,8 @@ export default function DebtPage() {
   const calcPlan = async () => {
     setCalcLoading(true)
     try {
-      const res = await fetch(`${BASE}/api/v1/debt/plan?strategy=${strategy}&extra_monthly=${parseFloat(extraMonthly) || 0}`)
-      setPlan(await res.json())
+      const res = await apiFetch<any>(`/api/v1/debt/plan?strategy=${strategy}&extra_monthly=${parseFloat(extraMonthly) || 0}`)
+      setPlan(res)
     } catch {} finally { setCalcLoading(false) }
   }
 
@@ -60,7 +60,7 @@ export default function DebtPage() {
     if (!inp?.amount) return
     setPayingId(debtId)
     try {
-      await fetch(`${BASE}/api/v1/debt/${debtId}/payments`, {
+      await apiFetch(`/api/v1/debt/${debtId}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: parseFloat(inp.amount), paid_on: new Date().toISOString().slice(0, 10), note: inp.note || null })
@@ -73,7 +73,7 @@ export default function DebtPage() {
   const deleteDebt = async (id: string) => {
     setDeletingId(id)
     try {
-      await fetch(`${BASE}/api/v1/debt/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/v1/debt/${id}`, { method: 'DELETE' })
       await fetchDebts()
     } catch {} finally { setDeletingId(null); setConfirmDelete(null) }
   }
@@ -82,7 +82,7 @@ export default function DebtPage() {
     if (!addForm.name || !addForm.balance) return
     setAddingDebt(true)
     try {
-      await fetch(`${BASE}/api/v1/debt/`, {
+      await apiFetch(`/api/v1/debt/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

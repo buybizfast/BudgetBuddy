@@ -4,7 +4,7 @@ import { BarChart2, Loader2, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+import { apiFetch, BASE } from '@/lib/api'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -51,10 +51,10 @@ export default function SpendingPage() {
     setLoading(true)
     try {
       const [yr, gt, mc, bm] = await Promise.all([
-        fetch(`${BASE}/api/v1/spending-analytics/year-summary?year=${year}`).then(r => r.json()).catch(() => null),
-        fetch(`${BASE}/api/v1/spending-analytics/trend?months=${trendWindow}`).then(r => r.json()).catch(() => []),
-        fetch(`${BASE}/api/v1/spending-analytics/top-merchants?year=${year}&month=${month}`).then(r => r.json()).catch(() => []),
-        fetch(`${BASE}/api/v1/budget/month/${year}/${month}`).then(r => r.json()).catch(() => null),
+        apiFetch(`/api/v1/spending-analytics/year-summary?year=${year}`).catch(() => null),
+        apiFetch(`/api/v1/spending-analytics/trend?months=${trendWindow}`).catch(() => []),
+        apiFetch(`/api/v1/spending-analytics/top-merchants?year=${year}&month=${month}`).catch(() => []),
+        apiFetch(`/api/v1/budget/month/${year}/${month}`).catch(() => null),
       ])
       setYearData(yr?.months ?? [])
       const trendData: { year: number; month: number; groups: Record<string, number> }[] = Array.isArray(gt) ? gt : []

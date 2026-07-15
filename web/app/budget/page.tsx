@@ -8,7 +8,7 @@ import { useBudget, BudgetGroup, BudgetCategory } from '@/hooks/useBudget'
 import { PageHeader } from '@/components/PageHeader'
 import { cn } from '@/lib/utils'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+import { apiFetch } from '@/lib/api'
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 function fmt(n: number) {
@@ -64,8 +64,7 @@ export default function BudgetPage() {
   const fetchInsights = async () => {
     setLoadingInsights(true)
     try {
-      const res = await fetch(`${BASE}/api/v1/budget/insights/${year}/${month}`)
-      const data = await res.json()
+      const data = await apiFetch<any>(`/api/v1/budget/insights/${year}/${month}`)
       setInsights(data.insights || data.message || JSON.stringify(data))
     } catch { setInsights('Unable to load insights at this time.') }
     finally { setLoadingInsights(false) }
@@ -74,8 +73,7 @@ export default function BudgetPage() {
   const fetchRecurring = async () => {
     setLoadingRecurring(true)
     try {
-      const res = await fetch(`${BASE}/api/v1/budget/recurring`)
-      const data = await res.json()
+      const data = await apiFetch<any[]>(`/api/v1/budget/recurring`)
       setRecurring(data)
     } catch { setRecurring([]) }
     finally { setLoadingRecurring(false) }
@@ -86,11 +84,11 @@ export default function BudgetPage() {
   const fetchAlerts = async () => {
     try {
       const [alertsRes, checkRes] = await Promise.all([
-        fetch(`${BASE}/api/v1/alerts/`),
-        fetch(`${BASE}/api/v1/alerts/check/${year}/${month}`)
+        apiFetch<any[]>(`/api/v1/alerts/`).catch(() => null),
+        apiFetch<any[]>(`/api/v1/alerts/check/${year}/${month}`).catch(() => null),
       ])
-      if (alertsRes.ok) setAlerts(await alertsRes.json())
-      if (checkRes.ok) setTriggeredAlerts(await checkRes.json())
+      if (alertsRes) setAlerts(alertsRes)
+      if (checkRes) setTriggeredAlerts(checkRes)
     } catch {}
   }
 
@@ -99,13 +97,13 @@ export default function BudgetPage() {
   const upsertAlert = async (categoryId: string, threshold: number) => {
     const existing = alerts.find(a => a.category_id === categoryId)
     if (existing) {
-      await fetch(`${BASE}/api/v1/alerts/${existing.id}`, {
+      await apiFetch(`/api/v1/alerts/${existing.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ threshold_pct: threshold, enabled: true })
       })
     } else {
-      await fetch(`${BASE}/api/v1/alerts/`, {
+      await apiFetch(`/api/v1/alerts/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category_id: categoryId, threshold_pct: threshold })
@@ -117,7 +115,7 @@ export default function BudgetPage() {
   const deleteAlert = async (categoryId: string) => {
     const existing = alerts.find(a => a.category_id === categoryId)
     if (existing) {
-      await fetch(`${BASE}/api/v1/alerts/${existing.id}`, { method: 'DELETE' })
+      await apiFetch(`/api/v1/alerts/${existing.id}`, { method: 'DELETE' })
       await fetchAlerts()
     }
   }
@@ -125,7 +123,7 @@ export default function BudgetPage() {
   const copyLastMonth = async () => {
     setCopyingMonth(true)
     try {
-      await fetch(`${BASE}/api/v1/budget/month/${year}/${month}/copy-previous`, { method: 'POST' })
+      await apiFetch(`/api/v1/budget/month/${year}/${month}/copy-previous`, { method: 'POST' })
       window.location.reload()
     } catch {} finally { setCopyingMonth(false) }
   }

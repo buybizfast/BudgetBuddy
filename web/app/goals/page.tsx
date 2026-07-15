@@ -4,7 +4,7 @@ import { Target, Plus, Trash2, Loader2, DollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+import { apiFetch, BASE } from '@/lib/api'
 
 interface Goal {
   id: string
@@ -47,8 +47,8 @@ export default function GoalsPage() {
   const fetchGoals = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${BASE}/api/v1/goals/`)
-      setGoals(await res.json())
+      const res = await apiFetch<any[]>(`/api/v1/goals/`)
+      setGoals(res)
     } catch { setGoals([]) } finally { setLoading(false) }
   }, [])
 
@@ -58,7 +58,7 @@ export default function GoalsPage() {
     if (!addForm.name || !addForm.target_amount) return
     setAddingGoal(true)
     try {
-      await fetch(`${BASE}/api/v1/goals/`, {
+      await apiFetch(`/api/v1/goals/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,7 +80,7 @@ export default function GoalsPage() {
     if (!amount) return
     setFundingId(goalId)
     try {
-      await fetch(`${BASE}/api/v1/goals/${goalId}/contributions`, {
+      await apiFetch(`/api/v1/goals/${goalId}/contributions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, contributed_on: new Date().toISOString().slice(0, 10), note: null })
@@ -93,7 +93,7 @@ export default function GoalsPage() {
   const deleteGoal = async (id: string) => {
     setDeletingId(id)
     try {
-      await fetch(`${BASE}/api/v1/goals/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/v1/goals/${id}`, { method: 'DELETE' })
       await fetchGoals()
     } catch {} finally { setDeletingId(null); setConfirmDelete(null) }
   }

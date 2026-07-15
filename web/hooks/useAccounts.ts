@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { authHeaders } from '@/lib/auth'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -19,9 +20,10 @@ export function useAccounts() {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
+      const headers = { ...authHeaders() }
       const [accts, itms] = await Promise.all([
-        fetch(`${BASE}/api/v1/plaid/accounts`).then(r => r.json()),
-        fetch(`${BASE}/api/v1/plaid/items`).then(r => r.json()),
+        fetch(`${BASE}/api/v1/plaid/accounts`, { headers }).then(r => r.json()),
+        fetch(`${BASE}/api/v1/plaid/items`, { headers }).then(r => r.json()),
       ])
       setAccounts(accts)
       setItems(itms)
@@ -32,12 +34,12 @@ export function useAccounts() {
   useEffect(() => { refresh() }, [refresh])
 
   const syncAll = async () => {
-    await fetch(`${BASE}/api/v1/plaid/sync-all`, { method: 'POST' })
+    await fetch(`${BASE}/api/v1/plaid/sync-all`, { method: 'POST', headers: { ...authHeaders() } })
     await refresh()
   }
 
   const removeItem = async (id: string) => {
-    await fetch(`${BASE}/api/v1/plaid/items/${id}`, { method: 'DELETE' })
+    await fetch(`${BASE}/api/v1/plaid/items/${id}`, { method: 'DELETE', headers: { ...authHeaders() } })
     await refresh()
   }
 
