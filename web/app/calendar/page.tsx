@@ -144,18 +144,29 @@ export default function CalendarPage() {
   const togglePaid = async (merchant: string) => {
     setToggling(merchant)
     const isPaid = paidMap[merchant]
+    // Optimistically update UI first
+    if (isPaid) {
+      setPaidMap(m => { const n = { ...m }; delete n[merchant]; return n })
+    } else {
+      setPaidMap(m => ({ ...m, [merchant]: true }))
+    }
     try {
       if (isPaid) {
         await apiFetch(`/api/v1/bills/paid?merchant_name=${encodeURIComponent(merchant)}&year=${year}&month=${month}`, { method: 'DELETE' })
-        setPaidMap(m => { const n = { ...m }; delete n[merchant]; return n })
       } else {
         await apiFetch('/api/v1/bills/paid', {
           method: 'POST',
           body: JSON.stringify({ merchant_name: merchant, year, month }),
         })
-        setPaidMap(m => ({ ...m, [merchant]: true }))
       }
-    } catch {} finally {
+    } catch {
+      // Revert on error
+      if (isPaid) {
+        setPaidMap(m => ({ ...m, [merchant]: true }))
+      } else {
+        setPaidMap(m => { const n = { ...m }; delete n[merchant]; return n })
+      }
+    } finally {
       setToggling(null)
     }
   }

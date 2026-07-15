@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, PiggyBank, Receipt, Building2, BarChart2 } from 'lucide-react'
+import { LayoutDashboard, PiggyBank, Receipt, Building2, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const tabs = [
@@ -9,7 +9,7 @@ const tabs = [
   { href: '/budget',       label: 'Budget',       icon: PiggyBank },
   { href: '/transactions', label: 'Transactions', icon: Receipt },
   { href: '/accounts',     label: 'Accounts',     icon: Building2 },
-  { href: '/spending',     label: 'Insights',     icon: BarChart2 },
+  { href: '/calendar',     label: 'Calendar',     icon: CalendarDays },
 ]
 
 export function BottomNav() {
