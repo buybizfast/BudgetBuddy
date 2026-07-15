@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.db.base import get_session
-from backend.db.models import BudgetCategory, BudgetGroup, BudgetMonth, Transaction
+from backend.db.models import BankAccount, BudgetCategory, BudgetGroup, BudgetMonth, PlaidItem, Transaction
 from backend.services import budget_service, budget_insights
 
 router = APIRouter(prefix="/api/v1/budget", tags=["budget"])
@@ -78,7 +78,8 @@ async def list_transactions(year: int = Query(...), month: int = Query(...),
              "merchant_name": txn.merchant_name, "amount": float(txn.amount), "category": txn.category,
              "budget_category_id": str(txn.budget_category_id) if txn.budget_category_id else None,
              "pending": txn.pending, "payment_channel": txn.payment_channel, "logo_url": txn.logo_url,
-             "personal_finance_category": txn.personal_finance_category} for txn, acct_name in result.all()]
+             "personal_finance_category": txn.personal_finance_category,
+             "is_manual": bool((txn.meta or {}).get("manual"))} for txn, acct_name in result.all()]
 
 
 class AssignCategoryRequest(BaseModel):
@@ -87,6 +88,69 @@ class AssignCategoryRequest(BaseModel):
 @router.patch("/transactions/{transaction_id}/category")
 async def assign_transaction_category(transaction_id: str, body: AssignCategoryRequest, db: AsyncSession = Depends(get_session)):
     await budget_service.assign_transaction_to_category(transaction_id, body.budget_category_id, db)
+    return {"status": "ok"}
+
+
+class CreateTransactionRequest(BaseModel):
+    name: str
+    amount: float
+    date: date
+    budget_category_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+async def _get_or_create_cash_account(db: AsyncSession) -> str:
+    """Return the id of the manual/cash account, creating it if needed."""
+    result = await db.execute(select(BankAccount).where(BankAccount.account_id == "manual-cash"))
+    acct = result.scalar_one_or_none()
+    if acct:
+        return str(acct.id)
+
+    # Need a PlaidItem as FK — get or create a manual one
+    pi_result = await db.execute(select(PlaidItem).where(PlaidItem.item_id == "manual"))
+    pi = pi_result.scalar_one_or_none()
+    if not pi:
+        pi = PlaidItem(item_id="manual", access_token="manual", institution_id="manual",
+                       institution_name="Manual", status="active")
+        db.add(pi)
+        await db.flush()
+
+    acct = BankAccount(plaid_item_id=str(pi.id), account_id="manual-cash", name="Cash / Manual",
+                       type="depository", subtype="cash", current_balance=0, institution_name="Manual")
+    db.add(acct)
+    await db.flush()
+    return str(acct.id)
+
+
+@router.post("/transactions")
+async def create_transaction(body: CreateTransactionRequest, db: AsyncSession = Depends(get_session)):
+    account_id = await _get_or_create_cash_account(db)
+    txn = Transaction(
+        account_id=account_id,
+        name=body.name,
+        merchant_name=body.name,
+        amount=body.amount,
+        date=body.date,
+        budget_category_id=body.budget_category_id,
+        pending=False,
+        meta={"manual": True, "notes": body.notes or ""},
+    )
+    db.add(txn)
+    await db.commit()
+    await db.refresh(txn)
+    return {"id": str(txn.id), "name": txn.name, "amount": float(txn.amount), "date": txn.date.isoformat()}
+
+
+@router.delete("/transactions/{transaction_id}")
+async def delete_transaction(transaction_id: str, db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id))
+    txn = result.scalar_one_or_none()
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if not (txn.meta or {}).get("manual"):
+        raise HTTPException(status_code=400, detail="Only manually entered transactions can be deleted")
+    await db.delete(txn)
+    await db.commit()
     return {"status": "ok"}
 
 
