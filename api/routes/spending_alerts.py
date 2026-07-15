@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -21,8 +23,8 @@ class AlertCreate(BaseModel):
 
 
 class AlertUpdate(BaseModel):
-    threshold_pct: int | None = None
-    enabled: bool | None = None
+    threshold_pct: Optional[int] = None
+    enabled: Optional[bool] = None
 
 
 @router.get("/")

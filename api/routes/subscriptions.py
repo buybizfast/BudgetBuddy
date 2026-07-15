@@ -1,6 +1,8 @@
 """Subscription manager routes — overlays user status on top of recurring detection."""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -15,8 +17,8 @@ router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"])
 
 
 class SubscriptionUpdate(BaseModel):
-    status: str | None = None
-    notes: str | None = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
 
 
 @router.get("/")
