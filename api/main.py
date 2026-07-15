@@ -15,6 +15,7 @@ from api.routes import budget, plaid, debt, goals, spending_analytics, ws
 from api.routes import auth as auth_router
 from api.routes import subscriptions as subscriptions_router
 from api.routes import spending_alerts as alerts_router
+from api.routes import bills as bills_router
 from api.ws_manager import ws_manager
 from backend.db.base import engine, session_scope
 from backend.db.models import Base
@@ -72,6 +73,7 @@ app.include_router(spending_analytics.router, **_protected)
 app.include_router(ws.router)  # WebSocket auth handled separately
 app.include_router(subscriptions_router.router, **_protected)
 app.include_router(alerts_router.router, **_protected)
+app.include_router(bills_router.router, **_protected)
 
 @app.get("/", tags=["health"])
 async def health():

@@ -175,6 +175,24 @@ class UserSubscription(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
 
+class BillPayment(Base):
+    """Tracks whether a recurring bill was paid in a given month."""
+    __tablename__ = "bill_payments"
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    merchant_name = Column(String(300), nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    paid = Column(Boolean, nullable=False, default=True)
+    paid_on = Column(Date, nullable=True)
+    notes = Column(String(500))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        CheckConstraint("month >= 1 AND month <= 12", name="bill_payments_month_check"),
+        __import__('sqlalchemy').UniqueConstraint("merchant_name", "year", "month", name="uq_bill_payment_merchant_month"),
+    )
+
+
 class SpendingAlert(Base):
     __tablename__ = "spending_alerts"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
