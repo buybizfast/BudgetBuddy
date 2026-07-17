@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { BASE } from '@/lib/api'
 import { getToken } from '@/lib/auth'
 
+
 interface Message {
   role: 'user' | 'assistant'
   content: string
@@ -55,7 +56,6 @@ export default function CoachPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
-  const [noKey, setNoKey] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -69,55 +69,21 @@ export default function CoachPage() {
     setInput('')
 
     const userMsg: Message = { role: 'user', content: msg }
-    const newHistory = [...messages, userMsg]
-    setMessages(newHistory)
+    setMessages(prev => [...prev, userMsg])
     setStreaming(true)
-
-    const assistantMsg: Message = { role: 'assistant', content: '' }
-    setMessages(prev => [...prev, assistantMsg])
 
     try {
       const token = getToken()
       const res = await fetch(`${BASE}/api/v1/coach/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          message: msg,
-          history: messages.map(m => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ message: msg }),
       })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        if (err.error?.includes('ANTHROPIC_API_KEY')) {
-          setNoKey(true)
-          setMessages(prev => prev.slice(0, -1))
-          return
-        }
-        throw new Error('API error')
-      }
-
-      const reader = res.body?.getReader()
-      const decoder = new TextDecoder()
-      if (!reader) return
-
-      let accumulated = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        accumulated += decoder.decode(value, { stream: true })
-        setMessages(prev => {
-          const updated = [...prev]
-          updated[updated.length - 1] = { role: 'assistant', content: accumulated }
-          return updated
-        })
-      }
+      if (!res.ok) throw new Error('API error')
+      const data = await res.json()
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
     } catch {
-      setMessages(prev => {
-        const updated = [...prev]
-        updated[updated.length - 1] = { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }
-        return updated
-      })
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }])
     } finally {
       setStreaming(false)
       inputRef.current?.focus()
@@ -131,14 +97,6 @@ export default function CoachPage() {
   return (
     <div className="flex flex-col h-screen">
       <PageHeader title="AI Coach" subtitle="Personalized financial guidance" />
-
-      {/* No API key warning */}
-      {noKey && (
-        <div className="mx-4 mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-          <p className="font-semibold mb-1">Anthropic API key not set</p>
-          <p>Add <code className="bg-amber-100 px-1 rounded">ANTHROPIC_API_KEY=your_key</code> to a <code className="bg-amber-100 px-1 rounded">.env</code> file in the BudgetBuddy folder, then restart the backend.</p>
-        </div>
-      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-32">
