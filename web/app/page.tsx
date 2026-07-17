@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   PiggyBank, Receipt, Building2, Target, CreditCard, CalendarDays,
-  RefreshCw, BarChart2, ChevronRight, LogOut, TrendingDown, TrendingUp, Wallet, Bell,
+  RefreshCw, BarChart2, ChevronRight, LogOut, TrendingDown, TrendingUp, Wallet, Bell, Shield,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { clearToken } from '@/lib/auth'
@@ -17,6 +17,7 @@ const quickLinks = [
   { href: '/transactions',  label: 'Transactions',  icon: Receipt,      color: 'bg-blue-50 text-blue-600' },
   { href: '/accounts',      label: 'Accounts',      icon: Building2,    color: 'bg-purple-50 text-purple-600' },
   { href: '/goals',         label: 'Goals',         icon: Target,       color: 'bg-amber-50 text-amber-600' },
+  { href: '/emergency',     label: 'Emergency',     icon: Shield,       color: 'bg-blue-50 text-blue-600' },
   { href: '/debt',          label: 'Debt',          icon: CreditCard,   color: 'bg-red-50 text-red-500' },
   { href: '/subscriptions', label: 'Subscriptions', icon: RefreshCw,    color: 'bg-teal-50 text-teal-600' },
   { href: '/calendar',      label: 'Calendar',      icon: CalendarDays, color: 'bg-indigo-50 text-indigo-600' },
