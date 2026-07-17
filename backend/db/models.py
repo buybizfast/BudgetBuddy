@@ -193,6 +193,20 @@ class BillPayment(Base):
     )
 
 
+class NetWorthSnapshot(Base):
+    __tablename__ = "net_worth_snapshots"
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    assets = Column(Numeric(14, 2), nullable=False, default=0)
+    liabilities = Column(Numeric(14, 2), nullable=False, default=0)
+    net_worth = Column(Numeric(14, 2), nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        __import__('sqlalchemy').UniqueConstraint("year", "month", name="uq_net_worth_snapshot_ym"),
+    )
+
+
 class SpendingAlert(Base):
     __tablename__ = "spending_alerts"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
