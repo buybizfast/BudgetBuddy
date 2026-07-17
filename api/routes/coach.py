@@ -1,13 +1,11 @@
-"""Financial Coach — rule-based advice grounded in the user's real data.
-   Swap _rule_based_response() for a Claude API call when ready to go live.
-"""
+"""Financial Coach — Claude-powered advice grounded in the user's real data."""
 from __future__ import annotations
 
 import calendar
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -16,11 +14,36 @@ _limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import ANTHROPIC_API_KEY
 from backend.db.base import get_session
 from backend.db.models import BankAccount, DebtAccount, SavingsGoal, Transaction
 from backend.services.budget_service import get_budget_month_with_spending
 
 router = APIRouter(prefix="/api/v1/coach", tags=["coach"])
+
+SYSTEM_PROMPT = """\
+You are BudgetBuddy Coach, a friendly financial advisor who follows Dave Ramsey's \
+Baby Steps methodology strictly. You have access to the user's real financial data \
+provided in each message. Use it to give specific, personalized advice.
+
+Dave Ramsey's Baby Steps:
+1. Save $1,000 starter emergency fund
+2. Pay off all debt (except mortgage) using the debt snowball (smallest balance first)
+3. Build 3–6 months of expenses in a full emergency fund
+4. Invest 15% of household income in retirement
+5. Save for kids' college
+6. Pay off the home early
+7. Build wealth and give generously
+
+Guidelines:
+- Be warm, encouraging, and direct — like Dave himself
+- Always reference the user's actual numbers (income, debt balances, categories)
+- Keep responses concise and actionable (3–6 sentences or a short bulleted list)
+- Use markdown formatting (bold, bullet points) for readability
+- Never recommend debt consolidation loans, balance transfers as a solution, or index \
+funds until Baby Step 4
+- If the user asks something unrelated to personal finance, gently redirect them
+"""
 
 
 async def _load_data(db: AsyncSession) -> dict:
@@ -77,137 +100,49 @@ async def _load_data(db: AsyncSession) -> dict:
     }
 
 
-def _rule_based_response(question: str, d: dict) -> str:
-    """Generate a personalized response based on the user's data and question."""
-    q = question.lower()
-    income = d["income"]
-    spent = d["spent"]
-    left = d["left"]
-    total_debt = d["total_debt"]
-    ef_amount = d["ef_amount"]
-    ef_target = d["ef_target"]
-    over_cats = d["over_cats"]
-    debts = d["debts"]
+def _build_context(d: dict) -> str:
+    """Serialize the user's financial snapshot into a text block for Claude."""
+    def fmt(n): return f"${n:,.2f}"
 
-    def fmt(n): return f"${n:,.0f}"
-    def fmt2(n): return f"${n:,.2f}"
+    lines = ["=== USER'S CURRENT FINANCIAL DATA ==="]
+    lines.append(f"Month: {date.today().strftime('%B %Y')}")
+    lines.append(f"Income: {fmt(d['income'])}")
+    lines.append(f"Total spent: {fmt(d['spent'])}")
+    lines.append(f"Left to budget: {fmt(d['left'])}")
 
-    # --- Emergency fund ---
-    if any(w in q for w in ["emergency", "emergency fund", "baby step 1", "baby step 3"]):
-        if ef_amount == 0:
-            return (
-                f"You haven't started your emergency fund yet — this is Baby Step 1! 🛡️\n\n"
-                f"Dave Ramsey recommends saving $1,000 as a starter emergency fund first.\n\n"
-                f"**Action steps:**\n"
-                f"• Open the Emergency Fund tracker (home screen)\n"
-                f"• Set your target to $1,000 to start\n"
-                f"• Look at your budget — can you cut {fmt(100)}/month to build it faster?\n\n"
-                f"Once you hit $1,000, focus on Baby Step 2: paying off all debt."
-            )
-        elif ef_amount < 1000:
-            remaining = 1000 - ef_amount
-            return (
-                f"You're on your way! You have {fmt(ef_amount)} in your emergency fund. 🛡️\n\n"
-                f"You need {fmt(remaining)} more to complete Baby Step 1 ($1,000 starter fund).\n\n"
-                f"**To get there faster:**\n"
-                f"• Try to add {fmt(remaining / 3)}/month for the next 3 months\n"
-                f"{'• You have ' + fmt(left) + ' unbudgeted — put some toward your emergency fund!' if left > 0 else ''}"
-            )
-        elif ef_amount >= ef_target:
-            return (
-                f"Your emergency fund is fully funded at {fmt(ef_amount)}! 🎉\n\n"
-                f"That's a huge milestone. You're protected against unexpected expenses.\n\n"
-                f"**What's next:**\n"
-                f"{'• Baby Step 2: Focus on paying off your ' + fmt(total_debt) + ' in debt using the debt snowball' if total_debt > 0 else '• Baby Step 4: Invest 15% of your income for retirement'}"
-            )
-        else:
-            pct = (ef_amount / ef_target) * 100
-            return (
-                f"Your emergency fund is {pct:.0f}% funded — {fmt(ef_amount)} of {fmt(ef_target)}. 🛡️\n\n"
-                f"You need {fmt(ef_target - ef_amount)} more to reach your goal.\n\n"
-                f"Keep it up! Once fully funded you'll have a solid safety net."
-            )
+    if d["over_cats"]:
+        lines.append("\nOver-budget categories:")
+        for c in d["over_cats"]:
+            lines.append(f"  - {c['name']}: budgeted {fmt(c['budgeted'])}, spent {fmt(c['spent'])}, over by {fmt(c['over_by'])}")
+    else:
+        lines.append("\nNo over-budget categories this month.")
 
-    # --- Debt questions ---
-    if any(w in q for w in ["debt", "pay off", "snowball", "loan", "credit card", "baby step 2"]):
-        if total_debt == 0:
-            return "You have no debt! That's incredible — you're free! 🎉\n\nFocus on building wealth: Baby Step 4 (invest 15% for retirement) and Step 5/6."
-        smallest = debts[0] if debts else None
-        lines = [f"You have {fmt(total_debt)} in total debt across {len(debts)} account{'s' if len(debts) != 1 else ''}.\n"]
-        lines.append("**Dave Ramsey's Debt Snowball:**")
-        lines.append("List debts smallest to largest (ignoring interest rate). Pay minimums on all, attack the smallest with every extra dollar. The quick wins build momentum!\n")
-        if smallest:
-            lines.append(f"**Start here:** {smallest.name} — {fmt(float(smallest.balance))}")
-            lines.append(f"Minimum payment: {fmt(float(smallest.minimum_payment))}/mo")
-        if left > 0:
-            lines.append(f"\nYou have {fmt(left)} unbudgeted this month — throw it at your smallest debt!")
-        return "\n".join(lines)
+    lines.append(f"\nEmergency fund: {fmt(d['ef_amount'])} / {fmt(d['ef_target'])} target")
 
-    # --- Budget / spending questions ---
-    if any(w in q for w in ["budget", "spending", "overspend", "track", "on track", "categories"]):
-        if income == 0:
-            return "You haven't set your income for this month yet. Go to the Budget page and tap the income field to get started!"
-        spent_pct = (spent / income * 100) if income > 0 else 0
-        lines = [f"**This month's snapshot:**"]
-        lines.append(f"• Income: {fmt(income)}")
-        lines.append(f"• Spent: {fmt(spent)} ({spent_pct:.0f}% of income)")
-        lines.append(f"• Remaining: {fmt(income - spent)}\n")
-        if over_cats:
-            lines.append(f"**⚠️ You're over budget in {len(over_cats)} categor{'ies' if len(over_cats) != 1 else 'y'}:**")
-            for c in over_cats[:3]:
-                lines.append(f"• {c['name']}: budgeted {fmt(c['budgeted'])}, spent {fmt(c['spent'])} (over by {fmt(c['over_by'])})")
-            lines.append("\nTry adjusting next month's budget or cutting spending in these areas.")
-        else:
-            lines.append("✅ You're within budget in all categories — great discipline!")
-        if left > 0:
-            lines.append(f"\nYou still have {fmt(left)} to assign. Give every dollar a job — that's zero-based budgeting!")
-        return "\n".join(lines)
+    if d["debts"]:
+        lines.append(f"\nDebts (smallest to largest — snowball order):")
+        for debt in d["debts"]:
+            lines.append(f"  - {debt.name}: balance {fmt(float(debt.balance))}, min payment {fmt(float(debt.minimum_payment))}/mo, rate {debt.interest_rate}%")
+        lines.append(f"Total debt: {fmt(d['total_debt'])}")
+    else:
+        lines.append("\nNo outstanding debts.")
 
-    # --- Savings questions ---
-    if any(w in q for w in ["sav", "goal", "target"]):
-        goals = d["goals"]
-        if not goals:
-            return "You haven't set up any savings goals yet.\n\nHead to the Goals page to create one — whether it's a vacation, new car, or home down payment. Having a specific target makes saving much easier!"
-        lines = ["**Your savings goals:**"]
-        for g in goals:
+    if d["goals"]:
+        lines.append("\nSavings goals:")
+        for g in d["goals"]:
             pct = (float(g.current_amount) / float(g.target_amount) * 100) if float(g.target_amount) > 0 else 0
-            lines.append(f"• {g.icon} {g.name}: {fmt(float(g.current_amount))} / {fmt(float(g.target_amount))} ({pct:.0f}%)")
-        total_saved = sum(float(g.current_amount) for g in goals)
-        lines.append(f"\nTotal saved across all goals: {fmt(total_saved)}")
-        if left > 0:
-            lines.append(f"\nYou have {fmt(left)} unbudgeted — consider putting some toward your goals!")
-        return "\n".join(lines)
+            lines.append(f"  - {g.name}: {fmt(float(g.current_amount))} / {fmt(float(g.target_amount))} ({pct:.0f}%)")
 
-    # --- Income questions ---
-    if any(w in q for w in ["income", "earn", "salary", "make"]):
-        if income == 0:
-            return "Your income isn't set for this month yet. Go to Budget and tap the income field to enter it."
-        return (
-            f"Your budgeted income this month is {fmt(income)}.\n\n"
-            f"You've spent {fmt(spent)} so far ({(spent/income*100):.0f}% of income).\n\n"
-            f"Dave Ramsey recommends giving every dollar a job. "
-            f"{'You still have ' + fmt(left) + ' to assign!' if left > 0 else 'Great — your budget is fully assigned!'}"
-        )
+    budget = d.get("budget", {})
+    groups = budget.get("groups", [])
+    if groups:
+        lines.append("\nBudget categories:")
+        for g in groups:
+            for c in g.get("categories", []):
+                lines.append(f"  - {g['name']} › {c['name']}: budgeted {fmt(c.get('budgeted', 0))}, spent {fmt(c.get('spent', 0))}")
 
-    # --- Default / general questions ---
-    lines = []
-    if income > 0:
-        spent_pct = spent / income * 100
-        lines.append(f"**This month:** {fmt(income)} income · {fmt(spent)} spent ({spent_pct:.0f}%)")
-    if total_debt > 0:
-        lines.append(f"**Total debt:** {fmt(total_debt)} across {len(debts)} account{'s' if len(debts) != 1 else ''}")
-    if ef_amount > 0:
-        lines.append(f"**Emergency fund:** {fmt(ef_amount)} saved")
-    if over_cats:
-        lines.append(f"**Watch out:** Over budget in {over_cats[0]['name']} by {fmt(over_cats[0]['over_by'])}")
-    if left > 0:
-        lines.append(f"**Unassigned:** {fmt(left)} still needs a job in your budget")
-    lines.append("\n**Try asking me:**")
-    lines.append("• Am I on track with my budget?")
-    lines.append("• How should I pay off my debt?")
-    lines.append("• How is my emergency fund doing?")
-    lines.append("• Where am I overspending?")
-    return "\n".join(lines) if lines else "Tell me what's on your mind financially and I'll help you out!"
+    lines.append("=== END FINANCIAL DATA ===")
+    return "\n".join(lines)
 
 
 class ChatRequest(BaseModel):
@@ -218,6 +153,36 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 @_limiter.limit("30/minute")
 async def chat(request: Request, body: ChatRequest, db: AsyncSession = Depends(get_session)):
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=503, detail="AI coach is not configured. Set ANTHROPIC_API_KEY in your environment.")
+
     data = await _load_data(db)
-    response = _rule_based_response(body.message, data)
-    return {"response": response}
+    context = _build_context(data)
+
+    # Build conversation history for multi-turn support
+    messages = []
+    if body.history:
+        for turn in body.history[-10:]:  # keep last 10 turns to stay within context limits
+            role = turn.get("role")
+            content = turn.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+
+    # Inject financial context into the latest user message
+    user_content = f"{context}\n\nUser question: {body.message}"
+    messages.append({"role": "user", "content": user_content})
+
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        resp = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=messages,
+        )
+        response_text = resp.content[0].text
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI coach error: {exc}")
+
+    return {"response": response_text}

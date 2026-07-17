@@ -77,13 +77,17 @@ export default function CoachPage() {
       const res = await fetch(`${BASE}/api/v1/coach/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, history: messages }),
       })
-      if (!res.ok) throw new Error('API error')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || 'API error')
+      }
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }])
+    } catch (e: unknown) {
+      const detail = e instanceof Error ? e.message : 'Something went wrong.'
+      setMessages(prev => [...prev, { role: 'assistant', content: `Sorry — ${detail} Please try again.` }])
     } finally {
       setStreaming(false)
       inputRef.current?.focus()
@@ -129,7 +133,7 @@ export default function CoachPage() {
           <MessageBubble key={i} msg={msg} />
         ))}
 
-        {streaming && messages[messages.length - 1]?.content === '' && (
+        {streaming && (
           <div className="flex gap-3 items-start">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shrink-0">
               <Bot size={14} className="text-white" />
