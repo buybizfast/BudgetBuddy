@@ -1,0 +1,46 @@
+{
+  "name": "BudgetBuddy",
+  "short_name": "BudgetBuddy",
+  "description": "Dave Ramsey-style zero-based budgeting",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Budget",
+      "short_name": "Budget",
+      "url": "/budget",
+      "description": "View your monthly budget"
+    },
+    {
+      "name": "Transactions",
+      "short_name": "Txns",
+      "url": "/transactions",
+      "description": "Log a transaction"
+    },
+    {
+      "name": "AI Coach",
+      "short_name": "Coach",
+      "url": "/coach",
+      "description": "Get financial advice"
+    }
+  ]
+}

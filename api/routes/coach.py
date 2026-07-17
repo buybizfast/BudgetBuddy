@@ -7,8 +7,12 @@ import calendar
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+_limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -212,7 +216,8 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def chat(body: ChatRequest, db: AsyncSession = Depends(get_session)):
+@_limiter.limit("30/minute")
+async def chat(request: Request, body: ChatRequest, db: AsyncSession = Depends(get_session)):
     data = await _load_data(db)
     response = _rule_based_response(body.message, data)
     return {"response": response}

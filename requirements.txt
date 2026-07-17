@@ -8,4 +8,6 @@ python-dotenv>=1.0.0
 anthropic>=0.28.0
 python-jose[cryptography]>=3.3.0
 passlib>=1.7.4
+slowapi>=0.1.9
+cryptography>=41.0.0
 # plaid-python  # optional: uncomment to enable bank sync
