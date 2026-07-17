@@ -82,11 +82,11 @@ export default function ReportPage() {
         title="Monthly Report"
         left={
           <div className="flex items-center gap-1">
-            <button onClick={() => navMonth(-1)} className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
-              <ChevronLeft size={16} />
+            <button onClick={() => navMonth(-1)} aria-label="Previous month" className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+              <ChevronLeft size={16} aria-hidden="true" />
             </button>
-            <button onClick={() => navMonth(1)} className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
-              <ChevronRight size={16} />
+            <button onClick={() => navMonth(1)} aria-label="Next month" className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+              <ChevronRight size={16} aria-hidden="true" />
             </button>
           </div>
         }

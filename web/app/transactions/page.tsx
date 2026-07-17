@@ -138,11 +138,11 @@ export default function TransactionsPage() {
         title={`${MONTHS[month - 1]} ${year}`}
         left={
           <div className="flex items-center gap-1">
-            <button onClick={() => navMonth(-1)} className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
-              <ChevronLeft size={16} />
+            <button onClick={() => navMonth(-1)} aria-label="Previous month" className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+              <ChevronLeft size={16} aria-hidden="true" />
             </button>
-            <button onClick={() => navMonth(1)} className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
-              <ChevronRight size={16} />
+            <button onClick={() => navMonth(1)} aria-label="Next month" className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+              <ChevronRight size={16} aria-hidden="true" />
             </button>
           </div>
         }
@@ -165,12 +165,12 @@ export default function TransactionsPage() {
       />
       {/* Add transaction modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="add-txn-title" className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-gray-900">Add Transaction</h2>
-              <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                <X size={16} className="text-gray-500" />
+              <h2 id="add-txn-title" className="text-base font-bold text-gray-900">Add Transaction</h2>
+              <button onClick={() => setShowForm(false)} aria-label="Close form" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X size={16} aria-hidden="true" className="text-gray-500" />
               </button>
             </div>
             <form onSubmit={addTransaction} className="space-y-3">

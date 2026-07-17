@@ -161,11 +161,11 @@ export default function BudgetPage() {
 
   const headerRight = (
     <div className="flex items-center gap-2">
-      <button onClick={() => navMonth(-1)} className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
-        <ChevronLeft size={16} />
+      <button onClick={() => navMonth(-1)} aria-label="Previous month" className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+        <ChevronLeft size={16} aria-hidden="true" />
       </button>
-      <button onClick={() => navMonth(1)} className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
-        <ChevronRight size={16} />
+      <button onClick={() => navMonth(1)} aria-label="Next month" className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+        <ChevronRight size={16} aria-hidden="true" />
       </button>
     </div>
   )
@@ -431,10 +431,10 @@ export default function BudgetPage() {
       {/* Toast notifications */}
       <div className="fixed bottom-4 right-4 z-50 space-y-2">
         {toasts.map(t => (
-          <div key={t.id} className="flex items-center gap-2 bg-red-600 border border-red-500 rounded-xl px-4 py-2.5 text-sm text-white shadow-xl max-w-xs">
+          <div key={t.id} role="alert" className="flex items-center gap-2 bg-red-600 border border-red-500 rounded-xl px-4 py-2.5 text-sm text-white shadow-xl max-w-xs">
             <span className="flex-1">{t.message}</span>
-            <button onClick={() => setToasts(ts => ts.filter(x => x.id !== t.id))} className="text-red-100 hover:text-white">
-              <X size={14} />
+            <button onClick={() => setToasts(ts => ts.filter(x => x.id !== t.id))} aria-label="Dismiss alert" className="text-red-100 hover:text-white">
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         ))}
@@ -471,11 +471,16 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       {/* Group header */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        aria-controls={`group-${group.id}`}
+        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onToggle()}
         className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100"
         onClick={onToggle}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <ChevronDown size={14} className={cn('text-gray-400 shrink-0 transition-transform', collapsed && '-rotate-90')} />
+          <ChevronDown size={14} aria-hidden="true" className={cn('text-gray-400 shrink-0 transition-transform', collapsed && '-rotate-90')} />
           <span className="text-sm font-bold text-gray-900 truncate">{group.name}</span>
         </div>
         <div className="flex items-center gap-5 shrink-0 text-xs">
@@ -495,7 +500,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
       </div>
 
       {!collapsed && (
-        <div>
+        <div id={`group-${group.id}`}>
           {/* Column header row */}
           <div className="flex items-center px-4 py-1.5 bg-gray-50 border-b border-gray-100">
             <span className="flex-1 text-[10px] text-gray-400 uppercase tracking-wider pl-4">Category</span>

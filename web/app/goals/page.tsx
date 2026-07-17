@@ -230,26 +230,26 @@ export default function GoalsPage() {
           <h3 className="text-sm font-semibold text-gray-900">Create New Goal</h3>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-xs text-gray-500 mb-1 block font-medium">Goal Name *</label>
-              <input value={addForm.name} onChange={e => setAddForm(f => ({...f, name: e.target.value}))}
+              <label htmlFor="goal-name" className="text-xs text-gray-500 mb-1 block font-medium">Goal Name *</label>
+              <input id="goal-name" value={addForm.name} onChange={e => setAddForm(f => ({...f, name: e.target.value}))}
                 placeholder="e.g. Emergency Fund"
                 className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block font-medium">Target Amount *</label>
-              <input type="number" value={addForm.target_amount} onChange={e => setAddForm(f => ({...f, target_amount: e.target.value}))}
+              <label htmlFor="goal-target" className="text-xs text-gray-500 mb-1 block font-medium">Target Amount *</label>
+              <input id="goal-target" type="number" value={addForm.target_amount} onChange={e => setAddForm(f => ({...f, target_amount: e.target.value}))}
                 placeholder="0.00"
                 className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block font-medium">Current Amount</label>
-              <input type="number" value={addForm.current_amount} onChange={e => setAddForm(f => ({...f, current_amount: e.target.value}))}
+              <label htmlFor="goal-current" className="text-xs text-gray-500 mb-1 block font-medium">Current Amount</label>
+              <input id="goal-current" type="number" value={addForm.current_amount} onChange={e => setAddForm(f => ({...f, current_amount: e.target.value}))}
                 placeholder="0.00"
                 className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block font-medium">Target Date</label>
-              <input type="date" value={addForm.target_date} onChange={e => setAddForm(f => ({...f, target_date: e.target.value}))}
+              <label htmlFor="goal-date" className="text-xs text-gray-500 mb-1 block font-medium">Target Date</label>
+              <input id="goal-date" type="date" value={addForm.target_date} onChange={e => setAddForm(f => ({...f, target_date: e.target.value}))}
                 className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
@@ -363,7 +363,7 @@ export default function GoalsPage() {
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 flex-1">
                       <DollarSign size={11} className="text-gray-400 shrink-0" />
-                      <input type="number" placeholder="Add funds…" value={fundInputs[goal.id] || ''}
+                      <input type="number" placeholder="Add funds…" aria-label={`Amount to add to ${goal.name}`} value={fundInputs[goal.id] || ''}
                         onChange={e => setFundInputs(f => ({...f, [goal.id]: e.target.value}))}
                         className="bg-white text-gray-900 text-xs rounded-xl px-2 py-1.5 flex-1 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>

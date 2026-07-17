@@ -98,8 +98,13 @@ export default function CoachPage() {
     <div className="flex flex-col h-screen">
       <PageHeader title="AI Coach" subtitle="Personalized financial guidance" />
 
+      {/* Live region for screen readers */}
+      <div aria-live="polite" aria-atomic="false" className="sr-only">
+        {streaming ? 'Coach is typing…' : messages.length > 0 ? messages[messages.length - 1]?.content : ''}
+      </div>
+
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-32">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-32" role="log" aria-label="Conversation" aria-live="polite">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 pt-8">
             <div className="w-16 h-16 bg-gradient-to-br from-violet-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
@@ -140,22 +145,26 @@ export default function CoachPage() {
 
       {/* Input bar */}
       <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 shadow-lg">
-        <div className="max-w-2xl mx-auto flex gap-2">
+        <div className="max-w-2xl mx-auto flex gap-2" role="form" aria-label="Chat with your financial coach">
+          <label htmlFor="coach-input" className="sr-only">Message your coach</label>
           <input
+            id="coach-input"
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder="Ask your coach anything…"
             disabled={streaming}
+            aria-disabled={streaming}
             className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
           <button
             onClick={() => sendMessage()}
             disabled={!input.trim() || streaming}
+            aria-label={streaming ? 'Sending…' : 'Send message'}
             className="w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-xl flex items-center justify-center transition-colors shrink-0"
           >
-            {streaming ? <Loader2 size={16} className="animate-spin text-white" /> : <Send size={16} className="text-white" />}
+            {streaming ? <Loader2 size={16} className="animate-spin text-white" aria-hidden="true" /> : <Send size={16} className="text-white" aria-hidden="true" />}
           </button>
         </div>
       </div>
