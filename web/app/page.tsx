@@ -73,7 +73,7 @@ export default function TodayPage() {
   const totalSaved = goals.reduce((s, g) => s + g.current_amount, 0)
   const totalTarget = goals.reduce((s, g) => s + g.target_amount, 0)
 
-  const upcomingBills = subs
+  const upcomingSubs = subs
     .filter(s => s.status === 'active')
     .slice(0, 3)
 
@@ -189,14 +189,14 @@ export default function TodayPage() {
         </div>
 
         {/* Upcoming bills */}
-        {upcomingBills.length > 0 && (
+        {upcomingSubs.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 pt-4 pb-2">
               <h2 className="text-sm font-semibold text-gray-700">Upcoming Bills</h2>
               <Link href="/calendar" className="text-xs text-blue-600 font-medium">See all</Link>
             </div>
             <div className="divide-y divide-gray-50">
-              {upcomingBills.map(s => (
+              {upcomingSubs.map(s => (
                 <div key={s.merchant} className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="w-7 h-7 bg-teal-50 rounded-lg flex items-center justify-center">
