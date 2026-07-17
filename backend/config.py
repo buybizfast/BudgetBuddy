@@ -1,6 +1,9 @@
 from __future__ import annotations
 import os
 import secrets
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://budgetbuddy:budgetbuddy@localhost/budgetbuddy")
 PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID", "")
