@@ -4,12 +4,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   PiggyBank, Receipt, Building2, Target, CreditCard, CalendarDays,
-  RefreshCw, BarChart2, ChevronRight, LogOut, TrendingDown, TrendingUp, Wallet,
+  RefreshCw, BarChart2, ChevronRight, LogOut, TrendingDown, TrendingUp, Wallet, Bell,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { clearToken } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useUpcomingBills } from '@/hooks/useUpcomingBills'
 
 const quickLinks = [
   { href: '/budget',        label: 'Budget',        icon: PiggyBank,    color: 'bg-blue-50 text-blue-600' },
@@ -50,6 +51,7 @@ export default function TodayPage() {
   const [goals, setGoals] = useState<any[]>([])
   const [subs, setSubs] = useState<any[]>([])
   const [txns, setTxns] = useState<any[]>([])
+  const { bills: upcomingBills } = useUpcomingBills(7)
 
   useEffect(() => {
     apiFetch<any>(`/api/v1/budget/month/${year}/${month}`).then(setBudget).catch(() => {})
@@ -93,6 +95,37 @@ export default function TodayPage() {
       />
 
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+
+        {/* Bill reminders */}
+        {upcomingBills.length > 0 && (
+          <Link href="/calendar" className="block bg-amber-50 border border-amber-200 rounded-2xl p-4 hover:bg-amber-100 transition-colors">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+                <Bell size={16} className="text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-900">
+                  {upcomingBills.length === 1
+                    ? '1 bill due this week'
+                    : `${upcomingBills.length} bills due this week`}
+                </p>
+                <div className="mt-1 space-y-0.5">
+                  {upcomingBills.slice(0, 3).map(b => (
+                    <p key={b.merchant} className="text-xs text-amber-700">
+                      {b.merchant} — {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(b.amount)}
+                      {' · '}
+                      {b.days_until === 0 ? 'today' : b.days_until === 1 ? 'tomorrow' : `in ${b.days_until} days`}
+                    </p>
+                  ))}
+                  {upcomingBills.length > 3 && (
+                    <p className="text-xs text-amber-600 font-medium">+{upcomingBills.length - 3} more</p>
+                  )}
+                </div>
+              </div>
+              <ChevronRight size={16} className="text-amber-400 shrink-0 mt-1" />
+            </div>
+          </Link>
+        )}
 
         {/* Budget summary */}
         {budget && (

@@ -1,16 +1,17 @@
 """Bill payment tracking routes."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.base import get_session
 from backend.db.models import BillPayment
+from backend.services.recurring_service import detect_recurring
 
 router = APIRouter(prefix="/api/v1/bills", tags=["bills"])
 
@@ -69,6 +70,50 @@ async def mark_paid(body: MarkPaidRequest, db: AsyncSession = Depends(get_sessio
         db.add(payment)
     await db.commit()
     return {"status": "ok"}
+
+
+@router.get("/upcoming")
+async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=30), db: AsyncSession = Depends(get_session)):
+    """Return bills due in the next N days that haven't been marked paid."""
+    today = date.today()
+    cutoff = today + timedelta(days=days_ahead)
+    year, month = today.year, today.month
+
+    # Get all detected recurring subscriptions
+    subs = await detect_recurring(db, months_back=6)
+
+    # Load paid bills for this month
+    result = await db.execute(
+        select(BillPayment).where(and_(BillPayment.year == year, BillPayment.month == month, BillPayment.paid == True))
+    )
+    paid_merchants = {p.merchant_name for p in result.scalars().all()}
+
+    upcoming = []
+    days_in_month = (date(year, month % 12 + 1, 1) - timedelta(days=1)).day if month < 12 else 31
+
+    for sub in subs:
+        if sub.get("status") == "cancelled":
+            continue
+        merchant = sub["merchant"]
+        if merchant in paid_merchants:
+            continue
+        try:
+            base = date.fromisoformat(sub["next_expected"])
+        except Exception:
+            continue
+        # Compute bill day for this month
+        bill_day = min(base.day, days_in_month)
+        bill_date = date(year, month, bill_day)
+        if today <= bill_date <= cutoff:
+            upcoming.append({
+                "merchant": merchant,
+                "amount": sub.get("amount", 0),
+                "due_date": bill_date.isoformat(),
+                "days_until": (bill_date - today).days,
+            })
+
+    upcoming.sort(key=lambda x: x["due_date"])
+    return upcoming
 
 
 @router.delete("/paid")
