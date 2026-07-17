@@ -18,6 +18,7 @@ from api.routes import spending_alerts as alerts_router
 from api.routes import bills as bills_router
 from api.routes import networth as networth_router
 from api.routes import report as report_router
+from api.routes import coach as coach_router
 from api.ws_manager import ws_manager
 from backend.db.base import engine, session_scope
 from backend.db.models import Base
@@ -78,6 +79,7 @@ app.include_router(alerts_router.router, **_protected)
 app.include_router(bills_router.router, **_protected)
 app.include_router(networth_router.router, **_protected)
 app.include_router(report_router.router, **_protected)
+app.include_router(coach_router.router, **_protected)
 
 @app.get("/", tags=["health"])
 async def health():
