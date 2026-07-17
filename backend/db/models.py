@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from backend.db.base import Base
+from backend.db.encrypted_type import EncryptedString
 
 
 def _uuid() -> str:
@@ -21,7 +22,7 @@ class PlaidItem(Base):
     __tablename__ = "plaid_items"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     item_id = Column(String(200), unique=True, nullable=False)
-    access_token = Column(String(500), nullable=False)
+    access_token = Column(EncryptedString(700), nullable=False)  # 700 chars to fit Fernet overhead
     institution_id = Column(String(100))
     institution_name = Column(String(200))
     status = Column(String(20), nullable=False, default="active")
