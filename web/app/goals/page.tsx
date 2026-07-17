@@ -6,6 +6,12 @@ import { PageHeader } from '@/components/PageHeader'
 
 import { apiFetch, BASE } from '@/lib/api'
 
+interface Contribution {
+  id: string
+  amount: number
+  contributed_on: string
+}
+
 interface Goal {
   id: string
   name: string
@@ -14,6 +20,7 @@ interface Goal {
   target_date: string | null
   icon: string
   color: string
+  contributions?: Contribution[]
 }
 
 const EMOJIS = ['🎯', '🏠', '🚗', '✈️', '📚', '💍', '🏖️', '💰']
@@ -25,6 +32,88 @@ function fmt(n: number) {
 
 function fmt2(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+}
+
+function buildForecast(goal: Goal): { points: {month: number; amount: number}[]; projectedMonths: number | null; avgMonthly: number } {
+  const contributions = goal.contributions ?? []
+  const remaining = goal.target_amount - goal.current_amount
+
+  // Group contributions by year-month, get last 3 months with data
+  const byMonth: Record<string, number> = {}
+  for (const c of contributions) {
+    const key = c.contributed_on.slice(0, 7)
+    byMonth[key] = (byMonth[key] ?? 0) + c.amount
+  }
+  const monthlySums = Object.values(byMonth).sort()
+  const recent = monthlySums.slice(-3)
+  const avgMonthly = recent.length > 0 ? recent.reduce((a, b) => a + b, 0) / recent.length : 0
+
+  if (avgMonthly <= 0 || remaining <= 0) {
+    return { points: [], projectedMonths: remaining <= 0 ? 0 : null, avgMonthly }
+  }
+
+  const projectedMonths = Math.ceil(remaining / avgMonthly)
+  const totalMonths = Math.min(projectedMonths + 1, 25)
+
+  const points: {month: number; amount: number}[] = []
+  for (let i = 0; i <= totalMonths; i++) {
+    points.push({ month: i, amount: Math.min(goal.current_amount + avgMonthly * i, goal.target_amount) })
+  }
+  return { points, projectedMonths, avgMonthly }
+}
+
+function ForecastChart({ goal }: { goal: Goal }) {
+  const { points, projectedMonths, avgMonthly } = buildForecast(goal)
+
+  if (!points.length && projectedMonths !== 0) {
+    return (
+      <p className="text-xs text-gray-400 italic">Add funds to see a projection</p>
+    )
+  }
+
+  if (projectedMonths === 0) {
+    return <p className="text-xs font-medium" style={{ color: goal.color }}>Goal completed!</p>
+  }
+
+  const W = 240, H = 72
+  const maxAmt = goal.target_amount
+  const xs = points.map(p => (p.month / (points.length - 1)) * W)
+  const ys = points.map(p => H - (p.amount / maxAmt) * H)
+  const polyline = points.map((_, i) => `${xs[i]},${ys[i]}`).join(' ')
+  const area = `M${xs[0]},${H} ` + points.map((_, i) => `L${xs[i]},${ys[i]}`).join(' ') + ` L${xs[xs.length - 1]},${H} Z`
+
+  const completeDate = new Date()
+  completeDate.setMonth(completeDate.getMonth() + (projectedMonths ?? 0))
+  const dateStr = completeDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+
+  return (
+    <div className="space-y-1.5">
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: 56 }}>
+        <defs>
+          <linearGradient id={`fg-${goal.id}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={goal.color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={goal.color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* Target line */}
+        <line x1="0" y1="0" x2={W} y2="0" stroke={goal.color} strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.3" />
+        {/* Area fill */}
+        <path d={area} fill={`url(#fg-${goal.id})`} />
+        {/* Line */}
+        <polyline points={polyline} fill="none" stroke={goal.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* End dot */}
+        <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r="3" fill={goal.color} />
+      </svg>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-gray-400">Now</span>
+        <div className="text-center">
+          <p className="text-[10px] font-semibold" style={{ color: goal.color }}>{dateStr}</p>
+          <p className="text-[9px] text-gray-400">projected completion</p>
+        </div>
+        <span className="text-[10px] text-gray-400">{fmt(avgMonthly)}/mo avg</span>
+      </div>
+    </div>
+  )
 }
 
 function monthsLeft(target: string | null) {
@@ -282,6 +371,13 @@ export default function GoalsPage() {
                       className="text-xs px-2.5 py-1.5 bg-[#1a2e4a] hover:bg-[#162540] rounded-2xl transition-colors disabled:opacity-50 text-white font-semibold">
                       {fundingId === goal.id ? <Loader2 size={10} className="animate-spin" /> : 'Add'}
                     </button>
+                  </div>
+                )}
+
+                {!isCompleted && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Forecast</p>
+                    <ForecastChart goal={goal} />
                   </div>
                 )}
 

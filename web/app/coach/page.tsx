@@ -100,7 +100,7 @@ export default function CoachPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-32">
-        {messages.length === 0 && !noKey && (
+        {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 pt-8">
             <div className="w-16 h-16 bg-gradient-to-br from-violet-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
               <Sparkles size={28} className="text-white" />
