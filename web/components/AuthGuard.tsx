@@ -9,23 +9,28 @@ const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const [verified, setVerified] = useState(false)
   const isLogin = pathname === '/login'
+  const hasToken = Boolean(getToken())
+
+  // Optimistically show content if token exists; validate in background
+  const [ready, setReady] = useState(isLogin || hasToken)
 
   useEffect(() => {
-    if (isLogin) { setVerified(true); return }
+    if (isLogin) return
     const token = getToken()
     if (!token) { router.replace('/login'); return }
 
+    // Background validation — only kick out on explicit 401
     fetch(`${BASE}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => {
-        if (r.status === 401) { clearToken(); router.replace('/login') }
-        else setVerified(true)
-      })
-      .catch(() => setVerified(true))
+      .then(r => { if (r.status === 401) { clearToken(); router.replace('/login') } })
+      .catch(() => {}) // network error — keep showing the app
   }, [pathname, router, isLogin])
 
-  if (!verified) return null
+  useEffect(() => {
+    if (!isLogin && !hasToken) setReady(false)
+  }, [isLogin, hasToken])
+
+  if (!ready) return null
   return (
     <>
       {children}
