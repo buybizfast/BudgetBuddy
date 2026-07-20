@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { Plus, Loader2 } from 'lucide-react'
+import { getToken } from '@/lib/auth'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -16,8 +17,10 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
     token: linkToken ?? '',
     onSuccess: async (publicToken) => {
       try {
+        const token = getToken()
         await fetch(`${BASE}/api/v1/plaid/exchange-token`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ public_token: publicToken }),
         })
         onSuccess()
@@ -30,7 +33,10 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
     if (linkToken && ready) { open(); return }
     setFetching(true); setError(null)
     try {
-      const res = await fetch(`${BASE}/api/v1/plaid/link-token`)
+      const token = getToken()
+      const res = await fetch(`${BASE}/api/v1/plaid/link-token`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) throw new Error('Could not get link token')
       const data = await res.json()
       setLinkToken(data.link_token)
