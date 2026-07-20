@@ -25,7 +25,9 @@ try:
     _PLAID_AVAILABLE = True
     _ENV_MAP = {
         "sandbox": plaid.Environment.Sandbox,
-        "development": plaid.Environment.Development,
+        # Plaid retired the standalone "development" environment; it now
+        # shares the sandbox host, so route it there for compatibility.
+        "development": plaid.Environment.Sandbox,
         "production": plaid.Environment.Production,
     }
 except ImportError:
