@@ -47,13 +47,13 @@ function formatDate(iso: string) {
 
 function CadenceBadge({ cadence }: { cadence: string }) {
   const styles: Record<string, string> = {
-    monthly:   'bg-blue-50 text-blue-700 border-blue-100',
-    annual:    'bg-purple-50 text-purple-700 border-purple-100',
-    weekly:    'bg-emerald-50 text-emerald-700 border-emerald-100',
-    biweekly:  'bg-teal-50 text-teal-700 border-teal-100',
-    quarterly: 'bg-orange-50 text-orange-700 border-orange-100',
+    monthly:   'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900',
+    annual:    'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-900',
+    weekly:    'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-900',
+    biweekly:  'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-100 dark:border-teal-900',
+    quarterly: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-100 dark:border-orange-900',
   }
-  const cls = styles[cadence] ?? 'bg-gray-50 text-gray-600 border-gray-200'
+  const cls = styles[cadence] ?? 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
   return (
     <span className={cn('inline-block text-xs font-medium px-2 py-0.5 rounded-full border capitalize', cls)}>
       {cadence}
@@ -76,7 +76,7 @@ function StatusToggle({
     { value: 'cancelled', label: 'Cancelled', cls: 'bg-red-500 text-white' },
   ]
   return (
-    <div className="flex items-center gap-0.5 rounded-lg overflow-hidden border border-gray-200">
+    <div className="flex items-center gap-0.5 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
       {options.map(opt => (
         <button
           key={opt.value}
@@ -86,7 +86,7 @@ function StatusToggle({
             'text-xs px-2.5 py-1 font-medium transition-colors whitespace-nowrap',
             status === opt.value
               ? opt.cls
-              : 'bg-white text-gray-500 hover:bg-gray-50',
+              : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700',
             loading && 'opacity-60 cursor-not-allowed'
           )}
         >
@@ -170,7 +170,7 @@ export default function SubscriptionsPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-red-600 text-sm">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl p-3 flex items-center gap-2 text-red-600 dark:text-red-300 text-sm">
           <AlertCircle size={16} />
           {error}
         </div>
@@ -178,25 +178,25 @@ export default function SubscriptionsPage() {
 
       {/* Summary bar */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-500 mb-1">Monthly Cost</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Monthly Cost</p>
           <p className="text-xl font-bold text-blue-600">{fmt(totalMonthly)}</p>
-          <p className="text-xs text-gray-400 mt-0.5">active subscriptions</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">active subscriptions</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-500 mb-1">Annual Cost</p>
-          <p className="text-xl font-bold text-gray-900">{fmt0(totalAnnual)}</p>
-          <p className="text-xs text-gray-400 mt-0.5">per year</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Annual Cost</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{fmt0(totalAnnual)}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">per year</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-500 mb-1">Active Subscriptions</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Active Subscriptions</p>
           <p className="text-xl font-bold text-blue-600">{activeSubs.length}</p>
-          <p className="text-xs text-gray-400 mt-0.5">of {subs.length} total</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">of {subs.length} total</p>
         </div>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm w-fit">
+      <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-1 shadow-sm w-fit">
         {FILTER_TABS.map(tab => (
           <button
             key={tab.key}
@@ -205,7 +205,7 @@ export default function SubscriptionsPage() {
               'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap',
               filter === tab.key
                 ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
             )}
           >
             {tab.label}
@@ -215,10 +215,10 @@ export default function SubscriptionsPage() {
 
       {/* Subscription list */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
-          <RefreshCw size={40} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-600 font-medium">No subscriptions detected</p>
-          <p className="text-sm text-gray-400 mt-1">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
+          <RefreshCw size={40} className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-600 dark:text-gray-300 font-medium">No subscriptions detected</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
             {filter === 'all'
               ? 'Connect a bank account and sync transactions to detect recurring bills.'
               : `No ${filter} subscriptions found.`}
@@ -233,7 +233,7 @@ export default function SubscriptionsPage() {
               <div
                 key={sub.merchant}
                 className={cn(
-                  'bg-white rounded-2xl shadow-sm px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3',
+                  'bg-white dark:bg-gray-800 rounded-2xl shadow-sm px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3',
                   isCancelled && 'opacity-60'
                 )}
               >
@@ -241,31 +241,31 @@ export default function SubscriptionsPage() {
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div className="min-w-0">
                     <p className={cn(
-                      'text-sm font-bold text-gray-900 truncate',
-                      isCancelled && 'line-through text-gray-400'
+                      'text-sm font-bold text-gray-900 dark:text-gray-100 truncate',
+                      isCancelled && 'line-through text-gray-400 dark:text-gray-500'
                     )}>
                       {sub.merchant}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <CadenceBadge cadence={sub.cadence} />
                       {sub.notes && (
-                        <span className="text-xs text-gray-400 truncate max-w-[200px]">{sub.notes}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[200px]">{sub.notes}</span>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {/* Middle: due date + occurrences */}
-                <div className="flex items-center gap-6 shrink-0 text-xs text-gray-500">
+                <div className="flex items-center gap-6 shrink-0 text-xs text-gray-500 dark:text-gray-400">
                   <div>
-                    <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Next Due</p>
-                    <p className={cn('font-medium', isCancelled ? 'text-gray-400' : 'text-gray-700')}>
+                    <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Next Due</p>
+                    <p className={cn('font-medium', isCancelled ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300')}>
                       {formatDate(sub.next_expected)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Seen</p>
-                    <p className="font-medium text-gray-700">{sub.occurrences}x</p>
+                    <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Seen</p>
+                    <p className="font-medium text-gray-700 dark:text-gray-300">{sub.occurrences}x</p>
                   </div>
                 </div>
 
@@ -274,11 +274,11 @@ export default function SubscriptionsPage() {
                   <div className="text-right">
                     <p className={cn(
                       'text-base font-bold',
-                      isCancelled ? 'text-gray-400 line-through' : 'text-gray-900'
+                      isCancelled ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'
                     )}>
                       {fmt(sub.amount)}
                     </p>
-                    <p className="text-xs text-gray-400">{fmt(toMonthly(sub))}/mo</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{fmt(toMonthly(sub))}/mo</p>
                   </div>
                   <StatusToggle
                     status={sub.status}

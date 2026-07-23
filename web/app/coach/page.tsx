@@ -35,7 +35,7 @@ function MessageBubble({ msg }: { msg: Message }) {
         'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
         isUser
           ? 'bg-blue-600 text-white rounded-tr-sm'
-          : 'bg-white text-gray-800 shadow-sm rounded-tl-sm'
+          : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm rounded-tl-sm'
       )}>
         {msg.content.split('\n').map((line, i) => {
           if (line.startsWith('**') && line.endsWith('**')) {
@@ -115,13 +115,13 @@ export default function CoachPage() {
               <Sparkles size={28} className="text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-1">Your Financial Coach</h2>
-              <p className="text-sm text-gray-500 max-w-xs">Ask me anything about your budget, debt, or savings. I can see your real numbers.</p>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Your Financial Coach</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">Ask me anything about your budget, debt, or savings. I can see your real numbers.</p>
             </div>
             <div className="grid grid-cols-1 gap-2 w-full max-w-sm mt-2">
               {SUGGESTIONS.map(s => (
                 <button key={s} onClick={() => sendMessage(s)}
-                  className="text-left text-sm bg-white rounded-xl px-4 py-3 shadow-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border border-gray-100">
+                  className="text-left text-sm bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-700 dark:hover:text-blue-300 transition-colors border border-gray-100 dark:border-gray-700">
                   {s}
                 </button>
               ))}
@@ -138,8 +138,8 @@ export default function CoachPage() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shrink-0">
               <Bot size={14} className="text-white" />
             </div>
-            <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-              <Loader2 size={16} className="animate-spin text-gray-400" />
+            <div className="bg-white dark:bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+              <Loader2 size={16} className="animate-spin text-gray-400 dark:text-gray-500" />
             </div>
           </div>
         )}
@@ -148,7 +148,7 @@ export default function CoachPage() {
       </div>
 
       {/* Input bar */}
-      <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 shadow-lg">
+      <div className="fixed bottom-16 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 px-4 py-3 shadow-lg">
         <div className="max-w-2xl mx-auto flex gap-2" role="form" aria-label="Chat with your financial coach">
           <label htmlFor="coach-input" className="sr-only">Message your coach</label>
           <input
@@ -160,7 +160,7 @@ export default function CoachPage() {
             placeholder="Ask your coach anything…"
             disabled={streaming}
             aria-disabled={streaming}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
           <button
             onClick={() => sendMessage()}

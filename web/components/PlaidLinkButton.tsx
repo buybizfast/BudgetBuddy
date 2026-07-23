@@ -54,7 +54,7 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
         {fetching ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
         {fetching ? 'Connecting…' : linkToken && !ready ? 'Loading…' : 'Connect Bank'}
       </button>
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+      {error && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{error}</p>}
     </div>
   )
 }

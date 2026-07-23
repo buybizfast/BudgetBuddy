@@ -117,54 +117,54 @@ export default function ReportPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4 print-page">
         {/* Report header for print */}
-        <div className="hidden print:block text-center py-4 border-b border-gray-200 mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">BudgetBuddy Monthly Report</h1>
-          <p className="text-gray-500">{MONTHS[month - 1]} {year}</p>
+        <div className="hidden print:block text-center py-4 border-b border-gray-200 dark:border-gray-700 mb-4">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">BudgetBuddy Monthly Report</h1>
+          <p className="text-gray-500 dark:text-gray-400">{MONTHS[month - 1]} {year}</p>
         </div>
 
         {/* Month label */}
-        <p className="text-sm font-semibold text-gray-500 text-center">{MONTHS[month - 1]} {year}</p>
+        <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 text-center">{MONTHS[month - 1]} {year}</p>
 
         {/* Summary cards */}
         {s && (
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-xs text-gray-400 mb-1">Income</p>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Income</p>
               <p className="text-xl font-bold text-green-600">{fmt(s.total_income)}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-xs text-gray-400 mb-1">Spent</p>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Spent</p>
               <p className="text-xl font-bold text-red-500">{fmt(s.total_spent)}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-xs text-gray-400 mb-1">Net</p>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Net</p>
               <p className={cn('text-xl font-bold', s.net >= 0 ? 'text-blue-600' : 'text-red-500')}>{fmt(s.net)}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-xs text-gray-400 mb-1">Transactions</p>
-              <p className="text-xl font-bold text-gray-900">{s.transaction_count}</p>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Transactions</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{s.transaction_count}</p>
             </div>
           </div>
         )}
 
         {/* Budget by category */}
         {report?.budget?.groups && report.budget.groups.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-700">Budget vs Actual</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Budget vs Actual</h2>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 dark:divide-gray-700">
               {report.budget.groups.map(group => {
                 const groupSpent = group.categories.reduce((s, c) => s + (c.spent ?? 0), 0)
                 const groupBudgeted = group.categories.reduce((s, c) => s + c.budgeted, 0)
                 if (groupBudgeted === 0 && groupSpent === 0) return null
                 return (
                   <div key={group.name}>
-                    <div className="flex items-center justify-between px-4 py-2 bg-gray-50">
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{group.name}</p>
-                      <div className="flex gap-4 text-xs text-gray-500">
-                        <span>Budget: <span className="font-semibold text-gray-700">{fmt(groupBudgeted)}</span></span>
-                        <span>Spent: <span className={cn('font-semibold', groupSpent > groupBudgeted && groupBudgeted > 0 ? 'text-red-500' : 'text-gray-700')}>{fmt(groupSpent)}</span></span>
+                    <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-900">
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">{group.name}</p>
+                      <div className="flex gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <span>Budget: <span className="font-semibold text-gray-700 dark:text-gray-300">{fmt(groupBudgeted)}</span></span>
+                        <span>Spent: <span className={cn('font-semibold', groupSpent > groupBudgeted && groupBudgeted > 0 ? 'text-red-500' : 'text-gray-700 dark:text-gray-300')}>{fmt(groupSpent)}</span></span>
                       </div>
                     </div>
                     {group.categories.filter(c => c.budgeted > 0 || (c.spent ?? 0) > 0).map(cat => {
@@ -174,14 +174,14 @@ export default function ReportPage() {
                       return (
                         <div key={cat.name} className="px-4 py-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-xs text-gray-700">{cat.name}</p>
+                            <p className="text-xs text-gray-700 dark:text-gray-300">{cat.name}</p>
                             <div className="flex gap-3 text-xs">
-                              <span className="text-gray-400">{fmt(cat.budgeted)}</span>
-                              <span className={cn('font-semibold', over ? 'text-red-500' : 'text-gray-700')}>{fmt(spent)}</span>
+                              <span className="text-gray-400 dark:text-gray-500">{fmt(cat.budgeted)}</span>
+                              <span className={cn('font-semibold', over ? 'text-red-500' : 'text-gray-700 dark:text-gray-300')}>{fmt(spent)}</span>
                             </div>
                           </div>
                           {cat.budgeted > 0 && (
-                            <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                               <div className={cn('h-full rounded-full', over ? 'bg-red-400' : pct > 80 ? 'bg-amber-400' : 'bg-blue-400')}
                                 style={{ width: `${pct}%` }} />
                             </div>
@@ -198,18 +198,18 @@ export default function ReportPage() {
 
         {/* Accounts snapshot */}
         {report?.accounts && report.accounts.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-700">Account Balances</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Account Balances</h2>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 dark:divide-gray-700">
               {report.accounts.map((a, i) => (
                 <div key={i} className="flex items-center justify-between px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{a.name}</p>
-                    <p className="text-xs text-gray-400">{a.institution_name} · {a.type}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-300">{a.name}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{a.institution_name} · {a.type}</p>
                   </div>
-                  <p className={cn('text-sm font-bold', a.current_balance < 0 ? 'text-red-500' : 'text-gray-900')}>
+                  <p className={cn('text-sm font-bold', a.current_balance < 0 ? 'text-red-500' : 'text-gray-900 dark:text-gray-100')}>
                     {fmt2(a.current_balance)}
                   </p>
                 </div>
@@ -220,22 +220,22 @@ export default function ReportPage() {
 
         {/* Debt snapshot */}
         {report?.debts && report.debts.filter(d => !d.is_paid_off).length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-700">Debt Balances</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Debt Balances</h2>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 dark:divide-gray-700">
               {report.debts.filter(d => !d.is_paid_off).map((d, i) => (
                 <div key={i} className="flex items-center justify-between px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{d.name}</p>
-                    <p className="text-xs text-gray-400">{(d.interest_rate * 100).toFixed(2)}% APR</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-300">{d.name}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{(d.interest_rate * 100).toFixed(2)}% APR</p>
                   </div>
                   <p className="text-sm font-bold text-red-500">{fmt2(d.balance)}</p>
                 </div>
               ))}
-              <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-                <p className="text-sm font-semibold text-gray-700">Total Debt</p>
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900">
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Total Debt</p>
                 <p className="text-sm font-bold text-red-600">{fmt(s?.total_debt ?? 0)}</p>
               </div>
             </div>
@@ -244,22 +244,22 @@ export default function ReportPage() {
 
         {/* Transactions */}
         {report?.transactions && report.transactions.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-700">Transactions ({report.transactions.length})</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Transactions ({report.transactions.length})</h2>
               <button onClick={downloadCSV} disabled={downloading}
                 className="no-print flex items-center gap-1 text-xs text-blue-600 font-medium hover:text-blue-700">
                 <Download size={12} /> Export CSV
               </button>
             </div>
-            <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto print:max-h-none print:overflow-visible">
+            <div className="divide-y divide-gray-50 dark:divide-gray-700 max-h-96 overflow-y-auto print:max-h-none print:overflow-visible">
               {report.transactions.map((t, i) => (
                 <div key={i} className="flex items-center justify-between px-4 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-gray-800 truncate">{t.merchant_name || t.name}</p>
-                    <p className="text-[10px] text-gray-400">{t.date} · {t.budget_category || t.account_name}</p>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-300 truncate">{t.merchant_name || t.name}</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500">{t.date} · {t.budget_category || t.account_name}</p>
                   </div>
-                  <span className={cn('text-xs font-bold ml-3 shrink-0', t.amount < 0 ? 'text-green-600' : 'text-gray-900')}>
+                  <span className={cn('text-xs font-bold ml-3 shrink-0', t.amount < 0 ? 'text-green-600' : 'text-gray-900 dark:text-gray-100')}>
                     {t.amount < 0 ? '+' : ''}{fmt2(Math.abs(t.amount))}
                   </span>
                 </div>
@@ -269,9 +269,9 @@ export default function ReportPage() {
         )}
 
         {!report && (
-          <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
-            <FileText size={40} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 font-medium">No data for this month</p>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
+            <FileText size={40} className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 dark:text-gray-400 font-medium">No data for this month</p>
           </div>
         )}
       </div>

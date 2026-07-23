@@ -100,13 +100,13 @@ export default function SpendingPage() {
         right={
           <div className="flex items-center gap-2">
             <select value={year} onChange={e => setYear(Number(e.target.value))}
-              className="bg-white text-gray-900 text-sm rounded-xl px-3 py-1.5 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-1.5 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
               {[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()].map(y => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
             <select value={month} onChange={e => setMonth(Number(e.target.value))}
-              className="bg-white text-gray-900 text-sm rounded-xl px-3 py-1.5 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-1.5 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
               {MONTH_FULL.map((m, i) => (
                 <option key={i + 1} value={i + 1}>{m}</option>
               ))}
@@ -117,17 +117,17 @@ export default function SpendingPage() {
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
       {/* Year at a Glance */}
-      <div className="bg-white rounded-2xl shadow-sm p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
         <div className="flex items-center gap-2 mb-4">
           <BarChart2 size={14} className="text-blue-600" />
-          <h3 className="text-sm font-semibold text-gray-900">{year} at a Glance</h3>
-          <div className="ml-auto flex items-center gap-3 text-xs text-gray-400">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{year} at a Glance</h3>
+          <div className="ml-auto flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" />Income</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-orange-400 inline-block" />Spent</span>
           </div>
         </div>
         {yearData.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">No data for {year}</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">No data for {year}</p>
         ) : (
           <div className="space-y-1.5">
             {MONTHS.map((m, idx) => {
@@ -138,15 +138,15 @@ export default function SpendingPage() {
               const sptPct = d ? (d.spent / maxSpent) * 100 : 0
               return (
                 <div key={m}
-                  className={cn('rounded-lg px-3 py-2 cursor-pointer transition-colors', isCurrentMonth ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50')}
+                  className={cn('rounded-lg px-3 py-2 cursor-pointer transition-colors', isCurrentMonth ? 'bg-blue-50 dark:bg-blue-950/40 ring-1 ring-blue-200 dark:ring-blue-800' : 'hover:bg-gray-50 dark:hover:bg-gray-700')}
                   onClick={() => setMonth(mo)}>
                   <div className="flex items-center gap-3">
-                    <span className={cn('text-xs w-8 shrink-0', isCurrentMonth ? 'text-blue-700 font-bold' : 'text-gray-400')}>{m}</span>
+                    <span className={cn('text-xs w-8 shrink-0', isCurrentMonth ? 'text-blue-700 dark:text-blue-400 font-bold' : 'text-gray-400 dark:text-gray-500')}>{m}</span>
                     <div className="flex-1 space-y-1">
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${incPct}%` }} />
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div className={cn('h-full rounded-full transition-all', d && d.spent > d.income ? 'bg-red-400' : 'bg-orange-400')} style={{ width: `${sptPct}%` }} />
                       </div>
                     </div>
@@ -154,11 +154,11 @@ export default function SpendingPage() {
                       {d ? (
                         <div className="text-xs">
                           <span className="text-blue-600">{fmt(d.income)}</span>
-                          <span className="text-gray-300 mx-1">/</span>
+                          <span className="text-gray-300 dark:text-gray-600 mx-1">/</span>
                           <span className={d.spent > d.income ? 'text-red-500' : 'text-orange-500'}>{fmt(d.spent)}</span>
                         </div>
                       ) : (
-                        <span className="text-xs text-gray-300">—</span>
+                        <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
                       )}
                     </div>
                   </div>
@@ -171,43 +171,43 @@ export default function SpendingPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Group Trend Table */}
-        <div className="bg-white rounded-2xl shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <TrendingUp size={14} className="text-blue-500" />
-              <h3 className="text-sm font-semibold text-gray-900">Monthly Group Trends</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Monthly Group Trends</h3>
             </div>
-            <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
               {([3, 6, 12] as TrendWindow[]).map(w => (
                 <button key={w} onClick={() => setTrendWindow(w)}
-                  className={cn('text-xs px-2 py-1 rounded-md transition-colors font-medium', trendWindow === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+                  className={cn('text-xs px-2 py-1 rounded-md transition-colors font-medium', trendWindow === w ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200')}>
                   {w}mo
                 </button>
               ))}
             </div>
           </div>
           {groupTrends.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No trend data available</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">No trend data available</p>
           ) : (
             <div className="overflow-x-auto scrollbar-none">
               <table className="w-full text-xs">
                 <thead>
                   <tr>
-                    <th className="text-left text-gray-400 font-medium pb-2 pr-3">Group</th>
+                    <th className="text-left text-gray-400 dark:text-gray-500 font-medium pb-2 pr-3">Group</th>
                     {trendMonths.map(m => (
-                      <th key={m} className="text-right text-gray-400 font-medium pb-2 px-1 whitespace-nowrap">
+                      <th key={m} className="text-right text-gray-400 dark:text-gray-500 font-medium pb-2 px-1 whitespace-nowrap">
                         {MONTHS[parseInt(m.split('-')[1]) - 1]}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                   {groupTrends.map(g => {
                     const vals = trendMonths.map(m => g.months[m] ?? 0)
                     const maxVal = Math.max(...vals, 1)
                     return (
                       <tr key={g.group_name}>
-                        <td className="py-2 pr-3 text-gray-700 font-medium truncate max-w-[100px]">{g.group_name}</td>
+                        <td className="py-2 pr-3 text-gray-700 dark:text-gray-300 font-medium truncate max-w-[100px]">{g.group_name}</td>
                         {trendMonths.map((m, i) => {
                           const val = vals[i]
                           const intensity = val > 0 ? Math.max(10, Math.round((val / maxVal) * 100)) : 0
@@ -215,11 +215,11 @@ export default function SpendingPage() {
                             <td key={m} className="text-right px-1 py-2">
                               <span className={cn(
                                 'inline-block px-1.5 py-0.5 rounded text-xs font-medium',
-                                intensity === 0 ? 'text-gray-300' :
-                                intensity < 30 ? 'bg-blue-50 text-blue-700' :
-                                intensity < 60 ? 'bg-yellow-50 text-yellow-700' :
-                                intensity < 85 ? 'bg-orange-50 text-orange-600' :
-                                'bg-red-50 text-red-600'
+                                intensity === 0 ? 'text-gray-300 dark:text-gray-600' :
+                                intensity < 30 ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' :
+                                intensity < 60 ? 'bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-300' :
+                                intensity < 85 ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-300' :
+                                'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300'
                               )}>
                                 {val > 0 ? fmt(val) : '—'}
                               </span>
@@ -236,25 +236,25 @@ export default function SpendingPage() {
         </div>
 
         {/* Top Merchants */}
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Top Merchants — {MONTH_FULL[month - 1]} {year}
           </h3>
           {merchants.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No merchant data for this period</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">No merchant data for this period</p>
           ) : (
             <div className="space-y-2.5">
               {merchants.slice(0, 10).map((m, i) => (
                 <div key={m.name}>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-700 flex items-center gap-1.5">
-                      <span className="text-gray-300 w-4 text-right">{i + 1}.</span>
+                    <span className="text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                      <span className="text-gray-300 dark:text-gray-600 w-4 text-right">{i + 1}.</span>
                       <span className="truncate max-w-[150px]">{m.name}</span>
-                      <span className="text-gray-400">({m.count}x)</span>
+                      <span className="text-gray-400 dark:text-gray-500">({m.count}x)</span>
                     </span>
-                    <span className="text-gray-900 font-medium">{fmt2(m.amount)}</span>
+                    <span className="text-gray-900 dark:text-gray-100 font-medium">{fmt2(m.amount)}</span>
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-400 rounded-full transition-all" style={{ width: `${(m.amount / maxMerchant) * 100}%` }} />
                   </div>
                 </div>
@@ -265,27 +265,27 @@ export default function SpendingPage() {
       </div>
 
       {/* Category Breakdown */}
-      <div className="bg-white rounded-2xl shadow-sm p-4">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Category Breakdown — {MONTH_FULL[month - 1]} {year}
         </h3>
         {breakdown.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">No breakdown data for this period</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">No breakdown data for this period</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {breakdown.map(group => (
               <div key={group.group_name} className="space-y-2">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{group.group_name}</p>
+                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{group.group_name}</p>
                 {group.categories.map(cat => {
                   const pct = cat.budgeted > 0 ? Math.min(100, (cat.spent / cat.budgeted) * 100) : cat.spent > 0 ? 100 : 0
                   const over = cat.spent > cat.budgeted && cat.budgeted > 0
                   return (
                     <div key={cat.name}>
                       <div className="flex justify-between text-xs mb-0.5">
-                        <span className="text-gray-600 truncate max-w-[120px]">{cat.name}</span>
-                        <span className={over ? 'text-red-500 font-medium' : 'text-gray-500'}>{fmt(cat.spent)}</span>
+                        <span className="text-gray-600 dark:text-gray-300 truncate max-w-[120px]">{cat.name}</span>
+                        <span className={over ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'}>{fmt(cat.spent)}</span>
                       </div>
-                      <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div className={cn('h-full rounded-full', over ? 'bg-red-400' : 'bg-blue-500')}
                           style={{ width: `${pct}%` }} />
                       </div>

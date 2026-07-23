@@ -166,55 +166,55 @@ export default function TransactionsPage() {
       {/* Add transaction modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="add-txn-title" className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5">
+          <div role="dialog" aria-modal="true" aria-labelledby="add-txn-title" className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 id="add-txn-title" className="text-base font-bold text-gray-900">Add Transaction</h2>
-              <button onClick={() => setShowForm(false)} aria-label="Close form" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                <X size={16} aria-hidden="true" className="text-gray-500" />
+              <h2 id="add-txn-title" className="text-base font-bold text-gray-900 dark:text-gray-100">Add Transaction</h2>
+              <button onClick={() => setShowForm(false)} aria-label="Close form" className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <X size={16} aria-hidden="true" className="text-gray-500 dark:text-gray-400" />
               </button>
             </div>
             <form onSubmit={addTransaction} className="space-y-3">
               {/* Expense / Income toggle */}
-              <div className="flex bg-gray-100 rounded-xl p-1">
+              <div className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1">
                 <button type="button" onClick={() => setForm(f => ({ ...f, type: 'expense' }))}
                   className={cn('flex-1 py-2 text-sm font-semibold rounded-lg transition-colors',
-                    form.type === 'expense' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
+                    form.type === 'expense' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
                   Expense
                 </button>
                 <button type="button" onClick={() => setForm(f => ({ ...f, type: 'income' }))}
                   className={cn('flex-1 py-2 text-sm font-semibold rounded-lg transition-colors',
-                    form.type === 'income' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
+                    form.type === 'income' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
                   Income
                 </button>
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Description</label>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Description</label>
                 <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Grocery run"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Amount</label>
+                  <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Amount</label>
                   <input required type="number" min="0.01" step="0.01" value={form.amount}
                     onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                     placeholder="0.00"
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Date</label>
+                  <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Date</label>
                   <input required type="date" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Category <span className="text-gray-400">(optional)</span></label>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Category <span className="text-gray-400 dark:text-gray-500">(optional)</span></label>
                 <select value={form.budget_category_id} onChange={e => setForm(f => ({ ...f, budget_category_id: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
                   <option value="">— Uncategorized —</option>
                   {Object.entries(categories.reduce((groups: Record<string, Category[]>, cat) => {
                     if (!groups[cat.group_name]) groups[cat.group_name] = []
@@ -239,31 +239,31 @@ export default function TransactionsPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-gray-500 mb-1">Transactions</p>
-            <p className="text-xl font-bold text-gray-900">{filtered.length}</p>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Transactions</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{filtered.length}</p>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-gray-500 mb-1">Total Spent</p>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Spent</p>
             <p className="text-xl font-bold text-red-500">{fmt(totalSpent)}</p>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-gray-500 mb-1">Income</p>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Income</p>
             <p className="text-xl font-bold text-blue-600">{fmt(totalIncome)}</p>
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
-            <Receipt size={40} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-600 font-medium">No transactions found</p>
-            <p className="text-sm text-gray-400 mt-1">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
+            <Receipt size={40} className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-600 dark:text-gray-400 font-medium">No transactions found</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
               {filter === 'unassigned' ? 'All transactions are categorized.' : 'No transactions for this period.'}
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="divide-y divide-gray-100">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
               {filtered.map(tx => {
                 const [, , dayStr] = tx.date.split('-')
                 const monthIdx = parseInt(tx.date.split('-')[1]) - 1
@@ -271,15 +271,15 @@ export default function TransactionsPage() {
                 const day = parseInt(dayStr ?? '0', 10)
                 return (
                   <div key={tx.id} className={cn(
-                    'flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors',
+                    'flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors',
                     tx.pending && 'opacity-60'
                   )}>
-                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-full bg-gray-100 shrink-0">
-                      <span className="text-[9px] text-gray-500 uppercase leading-none">{shortMonth}</span>
-                      <span className="text-sm font-bold text-gray-900 leading-none">{day}</span>
+                    <div className="flex flex-col items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 shrink-0">
+                      <span className="text-[9px] text-gray-500 dark:text-gray-400 uppercase leading-none">{shortMonth}</span>
+                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-none">{day}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">{tx.merchant_name || tx.name}</p>
+                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{tx.merchant_name || tx.name}</p>
                       {tx.category_name && (
                         <p className="text-xs text-blue-600 font-medium">{tx.category_name}</p>
                       )}
@@ -287,12 +287,12 @@ export default function TransactionsPage() {
                     </div>
                     <div className="min-w-[140px]">
                       {updatingId === tx.id ? (
-                        <div className="flex justify-end"><Loader2 size={12} className="animate-spin text-gray-400" /></div>
+                        <div className="flex justify-end"><Loader2 size={12} className="animate-spin text-gray-400 dark:text-gray-500" /></div>
                       ) : (
                         <select
                           value={tx.category_id ?? ''}
                           onChange={e => assignCategory(tx.id, e.target.value)}
-                          className="bg-white text-gray-900 text-xs rounded-xl px-2 py-1 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                          className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
                         >
                           <option value="">— Uncategorized —</option>
                           {Object.entries(
@@ -314,11 +314,11 @@ export default function TransactionsPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       {(tx as any).is_manual && (
                         <button onClick={() => deleteTransaction(tx.id)} aria-label="Delete transaction"
-                          className="p-1 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
+                          className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors">
                           <Trash2 size={13} />
                         </button>
                       )}
-                      <span className={cn('text-sm font-semibold whitespace-nowrap text-right', tx.amount < 0 ? 'text-blue-600' : 'text-gray-900')}>
+                      <span className={cn('text-sm font-semibold whitespace-nowrap text-right', tx.amount < 0 ? 'text-blue-600' : 'text-gray-900 dark:text-gray-100')}>
                         {tx.amount < 0 ? '+' : ''}{fmt(Math.abs(tx.amount))}
                       </span>
                     </div>

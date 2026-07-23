@@ -31,7 +31,7 @@ function NetWorthChart({ snapshots }: { snapshots: Snapshot[] }) {
   const [hovered, setHovered] = useState<number | null>(null)
 
   if (snapshots.length < 2) return (
-    <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-sm">
+    <div className="flex flex-col items-center justify-center h-48 text-gray-400 dark:text-gray-500 text-sm">
       <TrendingUp size={32} className="mb-2 opacity-30" />
       Save at least 2 snapshots to see your chart
     </div>
@@ -185,11 +185,11 @@ export default function NetWorthPage() {
 
         {/* Current net worth card */}
         {current && (
-          <div className="bg-white rounded-2xl shadow-sm p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Current Net Worth</p>
-                <p className={cn('text-3xl font-bold', isPositive ? 'text-gray-900' : 'text-red-500')}>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Current Net Worth</p>
+                <p className={cn('text-3xl font-bold', isPositive ? 'text-gray-900 dark:text-gray-100' : 'text-red-500')}>
                   {fmt(current.net_worth)}
                 </p>
                 {trend && change !== null && (
@@ -206,7 +206,7 @@ export default function NetWorthPage() {
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors',
                   savedThisMonth
-                    ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                    ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50'
                     : 'bg-blue-600 text-white hover:bg-blue-700',
                   saving && 'opacity-50'
                 )}
@@ -217,57 +217,57 @@ export default function NetWorthPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-green-50 rounded-xl p-3">
-                <p className="text-xs text-green-600 font-medium mb-0.5">Total Assets</p>
-                <p className="text-lg font-bold text-green-700">{fmt(current.assets)}</p>
-                <p className="text-xs text-green-500 mt-0.5">Bank accounts + savings</p>
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3">
+                <p className="text-xs text-green-600 dark:text-green-400 font-medium mb-0.5">Total Assets</p>
+                <p className="text-lg font-bold text-green-700 dark:text-green-400">{fmt(current.assets)}</p>
+                <p className="text-xs text-green-500 dark:text-green-500 mt-0.5">Bank accounts + savings</p>
               </div>
-              <div className="bg-red-50 rounded-xl p-3">
-                <p className="text-xs text-red-500 font-medium mb-0.5">Total Liabilities</p>
-                <p className="text-lg font-bold text-red-600">{fmt(current.liabilities)}</p>
-                <p className="text-xs text-red-400 mt-0.5">Outstanding debt</p>
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
+                <p className="text-xs text-red-500 dark:text-red-400 font-medium mb-0.5">Total Liabilities</p>
+                <p className="text-lg font-bold text-red-600 dark:text-red-400">{fmt(current.liabilities)}</p>
+                <p className="text-xs text-red-400 dark:text-red-400 mt-0.5">Outstanding debt</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Chart */}
-        <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-700">History</h2>
-            <span className="text-xs text-gray-400">{history.length} snapshot{history.length !== 1 ? 's' : ''}</span>
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">History</h2>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{history.length} snapshot{history.length !== 1 ? 's' : ''}</span>
           </div>
           <NetWorthChart snapshots={history} />
 
           {history.length === 0 && (
             <div className="text-center py-4">
-              <p className="text-xs text-gray-400">Hit "Save Snapshot" each month to track your progress over time.</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Hit "Save Snapshot" each month to track your progress over time.</p>
             </div>
           )}
         </div>
 
         {/* Snapshot history table */}
         {history.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-700">Snapshot History</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Snapshot History</h2>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 dark:divide-gray-700">
               {[...history].reverse().map((s, i) => {
                 const prev = history[history.length - 2 - i]
                 const delta = prev ? s.net_worth - prev.net_worth : null
                 return (
                   <div key={`${s.year}-${s.month}`} className="flex items-center justify-between px-4 py-3">
                     <div>
-                      <p className="text-sm font-semibold text-gray-800">
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                         {MONTHS[s.month - 1]} {s.year}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
                         Assets {fmt(s.assets)} · Debt {fmt(s.liabilities)}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className={cn('text-sm font-bold', s.net_worth < 0 ? 'text-red-500' : 'text-gray-900')}>
+                      <p className={cn('text-sm font-bold', s.net_worth < 0 ? 'text-red-500' : 'text-gray-900 dark:text-gray-100')}>
                         {fmt(s.net_worth)}
                       </p>
                       {delta !== null && (

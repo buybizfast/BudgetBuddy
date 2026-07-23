@@ -18,12 +18,12 @@ const navLinks = [
 export function Navbar() {
   const pathname = usePathname()
   return (
-    <nav className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+    <nav className="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
       <div className="max-w-[1400px] mx-auto px-4">
         <div className="flex items-center h-14 gap-6">
           <Link href="/budget" className="flex items-center gap-2 group shrink-0">
             <PiggyBank size={20} strokeWidth={2.5} className="text-blue-600 group-hover:text-blue-700 transition-colors" />
-            <span className="font-bold text-gray-900 text-lg tracking-tight">
+            <span className="font-bold text-gray-900 dark:text-gray-100 text-lg tracking-tight">
               Budget<span className="text-blue-600">Buddy</span>
             </span>
           </Link>
@@ -34,8 +34,8 @@ export function Navbar() {
                 <Link key={href} href={href} className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap',
                   active
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
                 )}>
                   <Icon size={13} />
                   {label}

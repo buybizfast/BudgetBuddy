@@ -67,7 +67,7 @@ function ForecastChart({ goal }: { goal: Goal }) {
 
   if (!points.length && projectedMonths !== 0) {
     return (
-      <p className="text-xs text-gray-400 italic">Add funds to see a projection</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500 italic">Add funds to see a projection</p>
     )
   }
 
@@ -105,12 +105,12 @@ function ForecastChart({ goal }: { goal: Goal }) {
         <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r="3" fill={goal.color} />
       </svg>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-gray-400">Now</span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">Now</span>
         <div className="text-center">
           <p className="text-[10px] font-semibold" style={{ color: goal.color }}>{dateStr}</p>
-          <p className="text-[9px] text-gray-400">projected completion</p>
+          <p className="text-[9px] text-gray-400 dark:text-gray-500">projected completion</p>
         </div>
-        <span className="text-[10px] text-gray-400">{fmt(avgMonthly)}/mo avg</span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">{fmt(avgMonthly)}/mo avg</span>
       </div>
     </div>
   )
@@ -211,64 +211,64 @@ export default function GoalsPage() {
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-500 mb-1">Total Saved</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Saved</p>
           <p className="text-xl font-bold text-blue-600">{fmt(totalSaved)}</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-500 mb-1">Total Targets</p>
-          <p className="text-xl font-bold text-gray-900">{fmt(totalTargets)}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Targets</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{fmt(totalTargets)}</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-500 mb-1">Completed</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Completed</p>
           <p className="text-xl font-bold text-blue-600">{completed} / {goals.length}</p>
         </div>
       </div>
 
       {showAdd && (
-        <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-900">Create New Goal</h3>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Create New Goal</h3>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label htmlFor="goal-name" className="text-xs text-gray-500 mb-1 block font-medium">Goal Name *</label>
+              <label htmlFor="goal-name" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Goal Name *</label>
               <input id="goal-name" value={addForm.name} onChange={e => setAddForm(f => ({...f, name: e.target.value}))}
                 placeholder="e.g. Emergency Fund"
-                className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
-              <label htmlFor="goal-target" className="text-xs text-gray-500 mb-1 block font-medium">Target Amount *</label>
+              <label htmlFor="goal-target" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Target Amount *</label>
               <input id="goal-target" type="number" value={addForm.target_amount} onChange={e => setAddForm(f => ({...f, target_amount: e.target.value}))}
                 placeholder="0.00"
-                className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
-              <label htmlFor="goal-current" className="text-xs text-gray-500 mb-1 block font-medium">Current Amount</label>
+              <label htmlFor="goal-current" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Current Amount</label>
               <input id="goal-current" type="number" value={addForm.current_amount} onChange={e => setAddForm(f => ({...f, current_amount: e.target.value}))}
                 placeholder="0.00"
-                className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
-              <label htmlFor="goal-date" className="text-xs text-gray-500 mb-1 block font-medium">Target Date</label>
+              <label htmlFor="goal-date" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Target Date</label>
               <input id="goal-date" type="date" value={addForm.target_date} onChange={e => setAddForm(f => ({...f, target_date: e.target.value}))}
-                className="w-full bg-white text-gray-900 text-sm rounded-xl px-3 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block font-medium">Icon</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Icon</label>
               <div className="flex gap-1.5 flex-wrap">
                 {EMOJIS.map(e => (
                   <button key={e} onClick={() => setAddForm(f => ({...f, emoji: e}))}
-                    className={cn('text-lg w-8 h-8 rounded-lg flex items-center justify-center transition-colors border', addForm.emoji === e ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-500' : 'bg-gray-50 border-gray-200 hover:bg-gray-100')}>
+                    className={cn('text-lg w-8 h-8 rounded-lg flex items-center justify-center transition-colors border', addForm.emoji === e ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-600 ring-1 ring-blue-500' : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700')}>
                     {e}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block font-medium">Color</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Color</label>
               <div className="flex gap-1.5 flex-wrap">
                 {COLORS.map(c => (
                   <button key={c} onClick={() => setAddForm(f => ({...f, color: c}))}
-                    className={cn('w-6 h-6 rounded-full transition-transform', addForm.color === c ? 'scale-125 ring-2 ring-gray-400 ring-offset-1' : 'hover:scale-110')}
+                    className={cn('w-6 h-6 rounded-full transition-transform', addForm.color === c ? 'scale-125 ring-2 ring-gray-400 dark:ring-gray-500 ring-offset-1' : 'hover:scale-110')}
                     style={{ backgroundColor: c }} />
                 ))}
               </div>
@@ -280,7 +280,7 @@ export default function GoalsPage() {
               {addingGoal ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
               Create Goal
             </button>
-            <button onClick={() => setShowAdd(false)} className="text-sm px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl transition-colors">
+            <button onClick={() => setShowAdd(false)} className="text-sm px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl transition-colors">
               Cancel
             </button>
           </div>
@@ -288,10 +288,10 @@ export default function GoalsPage() {
       )}
 
       {goals.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
-          <Target size={40} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-600 font-medium">No goals yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create a savings goal to get started.</p>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
+          <Target size={40} className="text-gray-300 dark:text-gray-500 mx-auto mb-3" />
+          <p className="text-gray-600 dark:text-gray-300 font-medium">No goals yet</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Create a savings goal to get started.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -306,7 +306,7 @@ export default function GoalsPage() {
             const dashOffset = circumference - (pct / 100) * circumference
 
             return (
-              <div key={goal.id} className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+              <div key={goal.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
@@ -314,18 +314,18 @@ export default function GoalsPage() {
                       {goal.icon}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-900 leading-tight">{goal.name}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">{goal.name}</p>
                       {isCompleted && <span className="text-xs text-blue-600 font-medium">Completed!</span>}
                     </div>
                   </div>
                   <div className="relative shrink-0">
                     <svg width="52" height="52" viewBox="0 0 68 68">
-                      <circle cx="34" cy="34" r="30" fill="none" stroke="#f1f5f9" strokeWidth="6" />
+                      <circle cx="34" cy="34" r="30" fill="none" stroke="#f1f5f9" strokeWidth="6" className="dark:stroke-gray-700" />
                       <circle cx="34" cy="34" r="30" fill="none" stroke={goal.color} strokeWidth="6"
                         strokeDasharray={circumference} strokeDashoffset={dashOffset}
                         strokeLinecap="round" transform="rotate(-90 34 34)" />
                     </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700">
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">
                       {Math.round(pct)}%
                     </span>
                   </div>
@@ -333,22 +333,22 @@ export default function GoalsPage() {
 
                 <div>
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-gray-600">{fmt2(goal.current_amount)} saved</span>
-                    <span className="text-gray-400">of {fmt(goal.target_amount)}</span>
+                    <span className="text-gray-600 dark:text-gray-300">{fmt2(goal.current_amount)} saved</span>
+                    <span className="text-gray-400 dark:text-gray-500">of {fmt(goal.target_amount)}</span>
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
                   {goal.target_date && (
-                    <span className="text-xs px-2 py-0.5 bg-gray-100 rounded-full text-gray-500">
+                    <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400">
                       {new Date(goal.target_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                     </span>
                   )}
                   {ml !== null && !isCompleted && (
-                    <span className="text-xs px-2 py-0.5 bg-gray-100 rounded-full text-gray-500">
+                    <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400">
                       {ml} mo left
                     </span>
                   )}
@@ -362,10 +362,10 @@ export default function GoalsPage() {
                 {!isCompleted && (
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 flex-1">
-                      <DollarSign size={11} className="text-gray-400 shrink-0" />
+                      <DollarSign size={11} className="text-gray-400 dark:text-gray-500 shrink-0" />
                       <input type="number" placeholder="Add funds…" aria-label={`Amount to add to ${goal.name}`} value={fundInputs[goal.id] || ''}
                         onChange={e => setFundInputs(f => ({...f, [goal.id]: e.target.value}))}
-                        className="bg-white text-gray-900 text-xs rounded-xl px-2 py-1.5 flex-1 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 flex-1 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <button onClick={() => addFunds(goal.id)} disabled={fundingId === goal.id || !fundInputs[goal.id]}
                       className="text-xs px-2.5 py-1.5 bg-[#1a2e4a] hover:bg-[#162540] rounded-2xl transition-colors disabled:opacity-50 text-white font-semibold">
@@ -375,27 +375,27 @@ export default function GoalsPage() {
                 )}
 
                 {!isCompleted && (
-                  <div className="pt-2 border-t border-gray-100">
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Forecast</p>
+                  <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Forecast</p>
                     <ForecastChart goal={goal} />
                   </div>
                 )}
 
-                <div className="pt-1 border-t border-gray-100">
+                <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
                   {confirmDelete === goal.id ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">Delete this goal?</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Delete this goal?</span>
                       <button onClick={() => deleteGoal(goal.id)} disabled={deletingId === goal.id}
                         className="text-xs px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded transition-colors">
                         {deletingId === goal.id ? <Loader2 size={10} className="animate-spin inline" /> : 'Delete'}
                       </button>
-                      <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-0.5 bg-white border border-gray-200 text-gray-700 rounded-xl transition-colors">
+                      <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl transition-colors">
                         Cancel
                       </button>
                     </div>
                   ) : (
                     <button onClick={() => setConfirmDelete(goal.id)}
-                      className="text-xs text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1">
+                      className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1">
                       <Trash2 size={11} />Delete goal
                     </button>
                   )}

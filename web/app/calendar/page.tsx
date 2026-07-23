@@ -233,16 +233,16 @@ export default function CalendarPage() {
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-red-600 text-sm">
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-center gap-2 text-red-600 dark:text-red-400 text-sm">
           <AlertCircle size={16} />
           {error}
         </div>
       )}
 
       {/* Summary bar */}
-      <div className="bg-white rounded-2xl shadow-sm px-5 py-3 flex items-center gap-3 text-sm text-gray-600 flex-wrap">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm px-5 py-3 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
         <span>
-          <span className="font-semibold text-gray-900">{allBillsThisMonth.length}</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-100">{allBillsThisMonth.length}</span>
           {' '}{allBillsThisMonth.length === 1 ? 'bill' : 'bills'} in {MONTH_NAMES[month - 1]}:
           <span className="font-bold text-blue-600 ml-1">{fmt0(totalThisMonth)}</span>
         </span>
@@ -262,10 +262,10 @@ export default function CalendarPage() {
       {/* Main layout */}
       <div className="flex gap-4 items-start flex-col lg:flex-row">
         {/* Calendar grid */}
-        <div className="flex-1 min-w-0 bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-gray-200">
+        <div className="flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
             {DAY_NAMES.map(d => (
-              <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                 {d}
               </div>
             ))}
@@ -279,8 +279,8 @@ export default function CalendarPage() {
                 <div
                   key={idx}
                   className={cn(
-                    'min-h-[80px] p-1.5 border-b border-r border-gray-100 flex flex-col gap-1',
-                    day === null && 'bg-slate-50',
+                    'min-h-[80px] p-1.5 border-b border-r border-gray-100 dark:border-gray-700 flex flex-col gap-1',
+                    day === null && 'bg-slate-50 dark:bg-gray-900',
                     idx % 7 === 6 && 'border-r-0',
                   )}
                 >
@@ -288,7 +288,7 @@ export default function CalendarPage() {
                     <>
                       <span className={cn(
                         'text-xs font-semibold self-start leading-none px-1 py-0.5 rounded',
-                        todayCell ? 'bg-blue-600 text-white' : 'text-gray-600',
+                        todayCell ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-400',
                       )}>
                         {day}
                       </span>
@@ -300,7 +300,7 @@ export default function CalendarPage() {
                             title={`${sub.merchant} — ${fmt(sub.amount)}${paid ? ' ✓ Paid' : ''}`}
                             className={cn(
                               'text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate leading-tight',
-                              paid ? 'bg-green-100 text-green-700 line-through opacity-70' : chipStyle(sub.cadence),
+                              paid ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 line-through opacity-70' : chipStyle(sub.cadence),
                             )}
                           >
                             {sub.merchant.length > 10 ? sub.merchant.slice(0, 10) + '…' : sub.merchant}{' '}
@@ -309,7 +309,7 @@ export default function CalendarPage() {
                         )
                       })}
                       {bills.length > 3 && (
-                        <span className="text-[10px] text-gray-400 pl-1">+{bills.length - 3} more</span>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 pl-1">+{bills.length - 3} more</span>
                       )}
                     </>
                   )}
@@ -320,19 +320,19 @@ export default function CalendarPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="w-full lg:w-72 shrink-0 bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <p className="text-sm font-semibold text-gray-900">
+        <div className="w-full lg:w-72 shrink-0 bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Bills — {MONTH_NAMES[month - 1]}
             </p>
           </div>
 
           {allBillsThisMonth.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-gray-400">
+            <div className="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
               No bills scheduled this month.
             </div>
           ) : (
-            <ul className="divide-y divide-gray-100 max-h-[480px] overflow-y-auto">
+            <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[480px] overflow-y-auto">
               {allBillsThisMonth.map(({ sub, day }, i) => {
                 const paid = paidMap[sub.merchant]
                 const isToggling = toggling === sub.merchant
@@ -344,7 +344,7 @@ export default function CalendarPage() {
                       aria-label={paid ? 'Mark unpaid' : 'Mark paid'}
                       className={cn(
                         'shrink-0 transition-colors',
-                        paid ? 'text-green-500 hover:text-gray-400' : 'text-gray-300 hover:text-green-500',
+                        paid ? 'text-green-500 hover:text-gray-400' : 'text-gray-300 dark:text-gray-600 hover:text-green-500',
                         isToggling && 'opacity-50',
                       )}
                     >
@@ -357,12 +357,12 @@ export default function CalendarPage() {
                       {MONTH_NAMES[month - 1].slice(0, 3)} {day}
                     </span>
                     <span className={cn(
-                      'flex-1 text-sm text-gray-700 truncate font-medium',
-                      paid && 'line-through text-gray-400',
+                      'flex-1 text-sm text-gray-700 dark:text-gray-300 truncate font-medium',
+                      paid && 'line-through text-gray-400 dark:text-gray-500',
                     )}>
                       {sub.merchant}
                     </span>
-                    <span className={cn('text-sm font-bold shrink-0', paid ? 'text-gray-400' : 'text-gray-900')}>
+                    <span className={cn('text-sm font-bold shrink-0', paid ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100')}>
                       {fmt(sub.amount)}
                     </span>
                   </li>
@@ -371,8 +371,8 @@ export default function CalendarPage() {
             </ul>
           )}
 
-          <div className="px-4 py-3 border-t border-gray-100">
-            <p className="text-xs text-gray-400 mb-2 font-medium">Cadence</p>
+          <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 font-medium">Cadence</p>
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(CADENCE_CHIP).map(([cadence, cls]) => (
                 <span key={cadence} className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full capitalize', cls)}>
