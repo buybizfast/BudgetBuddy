@@ -51,10 +51,10 @@ export default function SpendingPage() {
     setLoading(true)
     try {
       const [yr, gt, mc, bm] = await Promise.all([
-        apiFetch(`/api/v1/spending-analytics/year-summary?year=${year}`).catch(() => null),
-        apiFetch(`/api/v1/spending-analytics/trend?months=${trendWindow}`).catch(() => []),
-        apiFetch(`/api/v1/spending-analytics/top-merchants?year=${year}&month=${month}`).catch(() => []),
-        apiFetch(`/api/v1/budget/month/${year}/${month}`).catch(() => null),
+        apiFetch<any>(`/api/v1/spending-analytics/year-summary?year=${year}`).catch(() => null),
+        apiFetch<any[]>(`/api/v1/spending-analytics/trend?months=${trendWindow}`).catch(() => []),
+        apiFetch<any[]>(`/api/v1/spending-analytics/top-merchants?year=${year}&month=${month}`).catch(() => []),
+        apiFetch<any>(`/api/v1/budget/month/${year}/${month}`).catch(() => null),
       ])
       setYearData(yr?.months ?? [])
       const trendData: { year: number; month: number; groups: Record<string, number> }[] = Array.isArray(gt) ? gt : []
