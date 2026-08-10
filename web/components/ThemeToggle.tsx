@@ -4,14 +4,20 @@ import { Sun, Moon } from 'lucide-react'
 import { getStoredTheme, applyTheme, type Theme } from '@/lib/theme'
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme>('light')
+  // Read the actual DOM state (set synchronously by the pre-hydration
+  // script) instead of a separately-tracked default, so the first click
+  // always toggles from the theme that's really showing.
+  const [theme, setTheme] = useState<Theme>(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  )
 
   useEffect(() => {
     setTheme(getStoredTheme())
   }, [])
 
   const toggle = () => {
-    const next: Theme = theme === 'dark' ? 'light' : 'dark'
+    const current: Theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    const next: Theme = current === 'dark' ? 'light' : 'dark'
     setTheme(next)
     applyTheme(next)
   }
