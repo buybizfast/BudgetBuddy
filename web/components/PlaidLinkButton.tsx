@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { Plus, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/auth'
@@ -52,7 +52,7 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
     } finally { setFetching(false) }
   }, [linkToken, ready, open])
 
-  useCallback(() => { if (ready && linkToken) open() }, [ready, linkToken, open])
+  useEffect(() => { if (ready && linkToken) open() }, [ready, linkToken, open])
 
   return (
     <div>
