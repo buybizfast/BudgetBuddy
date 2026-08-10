@@ -91,10 +91,6 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-
-        <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-4">
-          Set credentials via <code className="font-mono">AUTH_USERNAME</code> and <code className="font-mono">AUTH_PASSWORD</code> in your <code className="font-mono">.env</code>
-        </p>
       </div>
     </div>
   )
