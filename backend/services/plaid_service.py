@@ -58,7 +58,9 @@ async def create_link_token(user_id: str = "default-user") -> str:
     if PLAID_REDIRECT_URI:
         kwargs["redirect_uri"] = PLAID_REDIRECT_URI
     request = LinkTokenCreateRequest(**kwargs)
-    return client.link_token_create(request)["link_token"]
+    response = client.link_token_create(request)
+    log.info("Created Plaid link token — request_id=%s", response.get("request_id"))
+    return response["link_token"]
 
 
 async def exchange_public_token(public_token: str, db: AsyncSession) -> dict[str, Any]:

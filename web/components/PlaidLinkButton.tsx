@@ -26,7 +26,13 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
         onSuccess()
       } catch { setError('Failed to connect account.') }
     },
-    onExit: () => setLinkToken(null),
+    onExit: (err, metadata) => {
+      if (err) console.error('Plaid Link exit error:', err, 'metadata:', metadata)
+      setLinkToken(null)
+    },
+    onEvent: (eventName, metadata) => {
+      console.log('Plaid Link event:', eventName, metadata)
+    },
   })
 
   const handleClick = useCallback(async () => {
