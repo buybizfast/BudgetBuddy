@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from backend.config import PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV
+from backend.config import PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV, PLAID_REDIRECT_URI
 from backend.db.models import PlaidItem, BankAccount, Transaction
 
 log = logging.getLogger("services.plaid")
@@ -48,13 +48,16 @@ def _get_client():
 
 async def create_link_token(user_id: str = "default-user") -> str:
     client = _get_client()
-    request = LinkTokenCreateRequest(
+    kwargs: dict[str, Any] = dict(
         products=[Products("transactions")],
         client_name="Budget Buddy",
         country_codes=[CountryCode("US")],
         language="en",
         user=LinkTokenCreateRequestUser(client_user_id=user_id),
     )
+    if PLAID_REDIRECT_URI:
+        kwargs["redirect_uri"] = PLAID_REDIRECT_URI
+    request = LinkTokenCreateRequest(**kwargs)
     return client.link_token_create(request)["link_token"]
 
 

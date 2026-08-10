@@ -39,6 +39,7 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
       })
       if (!res.ok) throw new Error('Could not get link token')
       const data = await res.json()
+      sessionStorage.setItem('plaid_link_token', data.link_token)
       setLinkToken(data.link_token)
     } catch (e: any) {
       setError(e.message || 'Failed to initialize bank connection')
