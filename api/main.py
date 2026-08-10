@@ -27,6 +27,8 @@ from api.ws_manager import ws_manager
 from backend.db.base import engine, session_scope
 from backend.db.models import Base
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 log = logging.getLogger("api.main")
