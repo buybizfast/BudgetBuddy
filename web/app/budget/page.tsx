@@ -280,7 +280,7 @@ export default function BudgetPage() {
               </div>
             </div>
 
-            <PaycheckCard />
+            <PaycheckCard year={year} month={month} totalIncome={budget?.total_income} onSyncIncome={updateIncome} />
 
             {/* Budget Groups */}
             {budget?.groups.map(group => (

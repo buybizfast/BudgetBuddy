@@ -1,15 +1,35 @@
 """Debt snowball / avalanche tracker service."""
 from __future__ import annotations
 
+import math
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.db.models import DebtAccount, DebtPayment
+
+
+def _estimate_payoff(balance: float, annual_rate_pct: float, minimum_payment: float) -> dict[str, Any]:
+    """Months to pay off at minimum payment only, plus a projected payoff date."""
+    if balance <= 0 or minimum_payment <= 0:
+        return {"months": 0, "date": date.today().isoformat()}
+    monthly_rate = annual_rate_pct / 100 / 12
+    if monthly_rate <= 0:
+        months = math.ceil(balance / minimum_payment)
+    elif minimum_payment <= balance * monthly_rate:
+        # Minimum payment never covers interest — balance never shrinks.
+        return {"months": None, "date": None}
+    else:
+        months = math.ceil(
+            -math.log(1 - (monthly_rate * balance) / minimum_payment) / math.log(1 + monthly_rate)
+        )
+    payoff_year = date.today().year + (date.today().month - 1 + months) // 12
+    payoff_month = (date.today().month - 1 + months) % 12 + 1
+    return {"months": months, "date": date(payoff_year, payoff_month, 1).isoformat()}
 
 
 async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
@@ -20,25 +40,35 @@ async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
     return [_serialize(d) for d in result.scalars().all()]
 
 
-async def create_debt(name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession) -> dict[str, Any]:
+async def create_debt(
+    name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession,
+    account_type: str = "loan", due_date_day: Optional[int] = None, statement_date_day: Optional[int] = None,
+) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
     last = result.scalar_one_or_none()
     sort_order = (last.sort_order + 1) if last else 0
     debt = DebtAccount(name=name, balance=Decimal(str(balance)), minimum_payment=Decimal(str(minimum_payment)),
-                       interest_rate=Decimal(str(interest_rate)), sort_order=sort_order)
+                       interest_rate=Decimal(str(interest_rate)), sort_order=sort_order,
+                       account_type=account_type, due_date_day=due_date_day, statement_date_day=statement_date_day)
     db.add(debt)
     await db.commit()
     await db.refresh(debt)
     return _serialize(debt)
 
 
-async def update_debt(debt_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession) -> dict[str, Any]:
+async def update_debt(
+    debt_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession,
+    account_type=None, due_date_day=None, statement_date_day=None,
+) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
     debt = result.scalar_one()
     if name is not None: debt.name = name
     if balance is not None: debt.balance = Decimal(str(balance))
     if minimum_payment is not None: debt.minimum_payment = Decimal(str(minimum_payment))
     if interest_rate is not None: debt.interest_rate = Decimal(str(interest_rate))
+    if account_type is not None: debt.account_type = account_type
+    if due_date_day is not None: debt.due_date_day = due_date_day
+    if statement_date_day is not None: debt.statement_date_day = statement_date_day
     await db.commit()
     await db.refresh(debt)
     return _serialize(debt)
@@ -111,7 +141,10 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
 
 def _serialize(debt: DebtAccount) -> dict[str, Any]:
     total_paid = sum(float(p.amount) for p in debt.payments) if debt.payments else 0
+    payoff = _estimate_payoff(float(debt.balance), float(debt.interest_rate), float(debt.minimum_payment))
     return {"id": str(debt.id), "name": debt.name, "balance": float(debt.balance),
             "minimum_payment": float(debt.minimum_payment), "interest_rate": float(debt.interest_rate),
+            "account_type": debt.account_type, "due_date_day": debt.due_date_day, "statement_date_day": debt.statement_date_day,
             "sort_order": debt.sort_order, "is_paid_off": debt.is_paid_off, "total_paid": total_paid,
+            "expected_payoff_months": payoff["months"], "expected_payoff_date": payoff["date"],
             "payments": [{"id": str(p.id), "amount": float(p.amount), "paid_on": p.paid_on.isoformat(), "note": p.note} for p in (debt.payments or [])]}

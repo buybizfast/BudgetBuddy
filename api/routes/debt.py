@@ -25,19 +25,27 @@ async def list_debts(db: AsyncSession = Depends(get_session)):
 
 class CreateDebtRequest(BaseModel):
     name: str; balance: float; minimum_payment: float = 0.0; interest_rate: float = 0.0
+    account_type: str = "loan"; due_date_day: Optional[int] = None; statement_date_day: Optional[int] = None
 
 @router.post("/")
 async def create_debt(body: CreateDebtRequest, db: AsyncSession = Depends(get_session)):
-    return await debt_service.create_debt(body.name, body.balance, body.minimum_payment, body.interest_rate, db)
+    return await debt_service.create_debt(
+        body.name, body.balance, body.minimum_payment, body.interest_rate, db,
+        account_type=body.account_type, due_date_day=body.due_date_day, statement_date_day=body.statement_date_day,
+    )
 
 class UpdateDebtRequest(BaseModel):
     name: Optional[str] = None; balance: Optional[float] = None
     minimum_payment: Optional[float] = None; interest_rate: Optional[float] = None
+    account_type: Optional[str] = None; due_date_day: Optional[int] = None; statement_date_day: Optional[int] = None
 
 @router.patch("/{debt_id}")
 async def update_debt(debt_id: str, body: UpdateDebtRequest, db: AsyncSession = Depends(get_session)):
     try:
-        return await debt_service.update_debt(debt_id, body.name, body.balance, body.minimum_payment, body.interest_rate, db)
+        return await debt_service.update_debt(
+            debt_id, body.name, body.balance, body.minimum_payment, body.interest_rate, db,
+            account_type=body.account_type, due_date_day=body.due_date_day, statement_date_day=body.statement_date_day,
+        )
     except Exception:
         raise HTTPException(status_code=404, detail="Debt not found")
 

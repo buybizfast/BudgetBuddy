@@ -121,10 +121,17 @@ class DebtAccount(Base):
     balance = Column(Numeric(12, 2), nullable=False)
     minimum_payment = Column(Numeric(12, 2), nullable=False, default=0)
     interest_rate = Column(Numeric(6, 4), nullable=False, default=0)
+    account_type = Column(String(30), nullable=False, default="loan")  # credit_card / loan / student_loan / auto_loan / personal_loan / other
+    due_date_day = Column(Integer, nullable=True)  # day of month payment is due (1-31)
+    statement_date_day = Column(Integer, nullable=True)  # credit cards only: statement/reporting day (1-31)
     sort_order = Column(Integer, nullable=False, default=0)
     is_paid_off = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        CheckConstraint("due_date_day IS NULL OR (due_date_day >= 1 AND due_date_day <= 31)", name="ck_debt_due_date_day"),
+        CheckConstraint("statement_date_day IS NULL OR (statement_date_day >= 1 AND statement_date_day <= 31)", name="ck_debt_statement_date_day"),
+    )
     payments = relationship("DebtPayment", back_populates="debt", cascade="all, delete-orphan", order_by="DebtPayment.paid_on.desc()")
 
 

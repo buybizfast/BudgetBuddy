@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Wallet, Plus, Trash2, Loader2, X } from 'lucide-react'
+import { Wallet, Plus, Trash2, Loader2, X, RefreshCw } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -36,7 +36,26 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export function PaycheckCard() {
+const PAYCHECK_STEP_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, semimonthly: 15 }
+
+/** Days of the given month a paycheck lands on, mirroring the calendar page's logic. */
+function paycheckDaysForMonth(p: Paycheck, year: number, month: number): number[] {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const base = new Date(p.next_date + 'T00:00:00')
+  if (p.frequency === 'monthly') return [Math.min(base.getDate(), daysInMonth)]
+  const step = PAYCHECK_STEP_DAYS[p.frequency] ?? 14
+  const displayFirst = new Date(year, month - 1, 1)
+  const diffDays = Math.floor((displayFirst.getTime() - base.getTime()) / 86400000)
+  const remainder = ((diffDays % step) + step) % step
+  const firstOccurrence = remainder === 0 ? 1 : step - remainder + 1
+  const days: number[] = []
+  for (let d = firstOccurrence; d <= daysInMonth; d += step) days.push(d)
+  return days
+}
+
+interface Props { year: number; month: number; totalIncome?: number; onSyncIncome?: (amount: number) => Promise<void> }
+
+export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) {
   const [paychecks, setPaychecks] = useState<Paycheck[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingPaycheck[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,6 +65,7 @@ export function PaycheckCard() {
   const [amount, setAmount] = useState('')
   const [frequency, setFrequency] = useState<Paycheck['frequency']>('biweekly')
   const [nextDate, setNextDate] = useState('')
+  const [syncing, setSyncing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,6 +102,18 @@ export function PaycheckCard() {
   }
 
   const nextPaycheck = upcoming[0]
+
+  const thisMonth = paychecks
+    .flatMap(p => paycheckDaysForMonth(p, year, month).map(day => ({ paycheck: p, day })))
+    .sort((a, b) => a.day - b.day)
+  const thisMonthTotal = thisMonth.reduce((sum, { paycheck }) => sum + paycheck.amount, 0)
+  const inSync = totalIncome !== undefined && Math.abs(totalIncome - thisMonthTotal) < 0.005
+
+  const syncIncome = async () => {
+    if (!onSyncIncome) return
+    setSyncing(true)
+    try { await onSyncIncome(thisMonthTotal) } finally { setSyncing(false) }
+  }
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
@@ -137,6 +169,23 @@ export function PaycheckCard() {
               <span className="text-xs text-green-600 dark:text-green-400 font-medium">
                 {nextPaycheck.days_until === 0 ? 'Today' : `in ${nextPaycheck.days_until}d`}
               </span>
+            </div>
+          )}
+          {thisMonth.length > 0 && (
+            <div className="mb-3 p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">
+                  This month's paychecks ({thisMonth.length})
+                </p>
+                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmt(thisMonthTotal)}</p>
+              </div>
+              {onSyncIncome && (
+                <button onClick={syncIncome} disabled={syncing || inSync}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs py-1.5 bg-white dark:bg-gray-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors font-medium">
+                  {syncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                  {inSync ? 'Income matches paychecks' : `Set month's income to ${fmt(thisMonthTotal)}`}
+                </button>
+              )}
             </div>
           )}
           <div className="space-y-2">

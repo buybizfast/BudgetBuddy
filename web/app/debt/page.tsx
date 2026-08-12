@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { CreditCard, Plus, Trash2, ChevronDown, ChevronUp, Loader2, Calculator, DollarSign } from 'lucide-react'
+import { CreditCard, Plus, Trash2, ChevronDown, ChevronUp, Loader2, Calculator, DollarSign, CalendarClock, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
@@ -9,9 +9,32 @@ import { apiFetch, BASE } from '@/lib/api'
 interface Debt {
   id: string; name: string; balance: number; total_paid: number
   interest_rate: number; minimum_payment: number; payments: Payment[]
+  account_type: string; due_date_day: number | null; statement_date_day: number | null
+  expected_payoff_months: number | null; expected_payoff_date: string | null
+  is_paid_off: boolean
 }
 
 interface Payment { id: string; amount: number; paid_on: string; note: string | null }
+
+const ACCOUNT_TYPES = [
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'loan', label: 'Loan' },
+  { value: 'student_loan', label: 'Student Loan' },
+  { value: 'auto_loan', label: 'Auto Loan' },
+  { value: 'personal_loan', label: 'Personal Loan' },
+  { value: 'other', label: 'Other' },
+]
+
+function ordinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+function fmtMonthYear(iso: string) {
+  const d = new Date(iso + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
 
 interface PlanDebt { id: string; name: string; balance: number; minimum_payment: number; interest_rate: number; payoff_month: number }
 
@@ -34,7 +57,10 @@ export default function DebtPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', balance: '', interest_rate: '', minimum_payment: '' })
+  const [addForm, setAddForm] = useState({
+    name: '', balance: '', interest_rate: '', minimum_payment: '',
+    account_type: 'loan', due_date_day: '', statement_date_day: '',
+  })
   const [addingDebt, setAddingDebt] = useState(false)
 
   const fetchDebts = useCallback(async () => {
@@ -89,11 +115,14 @@ export default function DebtPage() {
           name: addForm.name,
           balance: parseFloat(addForm.balance),
           interest_rate: parseFloat(addForm.interest_rate || '0'),
-          minimum_payment: parseFloat(addForm.minimum_payment || '0')
+          minimum_payment: parseFloat(addForm.minimum_payment || '0'),
+          account_type: addForm.account_type,
+          due_date_day: addForm.due_date_day ? parseInt(addForm.due_date_day) : null,
+          statement_date_day: addForm.account_type === 'credit_card' && addForm.statement_date_day ? parseInt(addForm.statement_date_day) : null,
         })
       })
       await fetchDebts()
-      setAddForm({ name: '', balance: '', interest_rate: '', minimum_payment: '' })
+      setAddForm({ name: '', balance: '', interest_rate: '', minimum_payment: '', account_type: 'loan', due_date_day: '', statement_date_day: '' })
       setShowAddForm(false)
     } catch {} finally { setAddingDebt(false) }
   }
@@ -174,6 +203,27 @@ export default function DebtPage() {
                     placeholder="0.00"
                     className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Account Type</label>
+                  <select value={addForm.account_type} onChange={e => setAddForm(f => ({...f, account_type: e.target.value}))}
+                    className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    {ACCOUNT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Due Date (day of month)</label>
+                  <input type="number" min="1" max="31" value={addForm.due_date_day} onChange={e => setAddForm(f => ({...f, due_date_day: e.target.value}))}
+                    placeholder="e.g. 15"
+                    className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                </div>
+                {addForm.account_type === 'credit_card' && (
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Statement Date (day of month)</label>
+                    <input type="number" min="1" max="31" value={addForm.statement_date_day} onChange={e => setAddForm(f => ({...f, statement_date_day: e.target.value}))}
+                      placeholder="e.g. 3"
+                      className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <button onClick={addDebt} disabled={addingDebt}
@@ -214,6 +264,28 @@ export default function DebtPage() {
                           {debt.interest_rate > 0 ? `${debt.interest_rate}% APR · ` : ''}
                           Min. payment: {fmt(debt.minimum_payment)}
                         </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {debt.due_date_day && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 flex items-center gap-0.5">
+                              <CalendarClock size={9} />Due {ordinal(debt.due_date_day)}
+                            </span>
+                          )}
+                          {debt.account_type === 'credit_card' && debt.statement_date_day && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400">
+                              Statement {ordinal(debt.statement_date_day)}
+                            </span>
+                          )}
+                          {debt.expected_payoff_date && !debt.is_paid_off && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 flex items-center gap-0.5">
+                              <TrendingDown size={9} />Payoff {fmtMonthYear(debt.expected_payoff_date)}
+                            </span>
+                          )}
+                          {debt.expected_payoff_months === null && !debt.is_paid_off && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">
+                              Min. payment too low
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
