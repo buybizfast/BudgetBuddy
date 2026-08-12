@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { Wallet, Plus, Trash2, Loader2, X, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Plus, Trash2, Loader2, X } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -13,27 +13,8 @@ interface Paycheck {
   active: boolean
 }
 
-interface UpcomingPaycheck {
-  id: string
-  source: string
-  amount: number
-  date: string
-  days_until: number
-}
-
-const FREQUENCY_LABEL: Record<string, string> = {
-  weekly: 'Weekly',
-  biweekly: 'Every 2 weeks',
-  semimonthly: 'Twice a month',
-  monthly: 'Monthly',
-}
-
 function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n)
 }
 
 const PAYCHECK_STEP_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, semimonthly: 15 }
@@ -57,7 +38,6 @@ interface Props { year: number; month: number; totalIncome?: number; onSyncIncom
 
 export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) {
   const [paychecks, setPaychecks] = useState<Paycheck[]>([])
-  const [upcoming, setUpcoming] = useState<UpcomingPaycheck[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -65,18 +45,13 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
   const [amount, setAmount] = useState('')
   const [frequency, setFrequency] = useState<Paycheck['frequency']>('biweekly')
   const [nextDate, setNextDate] = useState('')
-  const [syncing, setSyncing] = useState(false)
+  const syncedRef = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [list, next] = await Promise.all([
-        apiFetch<Paycheck[]>('/api/v1/paychecks/'),
-        apiFetch<UpcomingPaycheck[]>('/api/v1/paychecks/upcoming?days_ahead=30'),
-      ])
-      setPaychecks(list)
-      setUpcoming(next)
-    } catch { setPaychecks([]); setUpcoming([]) }
+      setPaychecks(await apiFetch<Paycheck[]>('/api/v1/paychecks/'))
+    } catch { setPaychecks([]) }
     finally { setLoading(false) }
   }, [])
 
@@ -101,43 +76,58 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
     await load()
   }
 
-  const nextPaycheck = upcoming[0]
-
   const thisMonth = paychecks
     .flatMap(p => paycheckDaysForMonth(p, year, month).map(day => ({ paycheck: p, day })))
     .sort((a, b) => a.day - b.day)
   const thisMonthTotal = thisMonth.reduce((sum, { paycheck }) => sum + paycheck.amount, 0)
-  const inSync = totalIncome !== undefined && Math.abs(totalIncome - thisMonthTotal) < 0.005
 
-  const syncIncome = async () => {
-    if (!onSyncIncome) return
-    setSyncing(true)
-    try { await onSyncIncome(thisMonthTotal) } finally { setSyncing(false) }
-  }
+  // Keep the budget month's income in sync with scheduled paychecks automatically.
+  useEffect(() => {
+    if (loading || !onSyncIncome || totalIncome === undefined || thisMonth.length === 0) return
+    if (Math.abs(totalIncome - thisMonthTotal) < 0.005) { syncedRef.current = thisMonthTotal; return }
+    if (syncedRef.current === thisMonthTotal) return
+    syncedRef.current = thisMonthTotal
+    onSyncIncome(thisMonthTotal)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, thisMonthTotal, totalIncome])
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Wallet size={14} className="text-green-600" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Paychecks</h3>
-        </div>
-        <button onClick={() => setAdding(v => !v)}
-          className="flex items-center gap-1 text-xs px-2.5 py-1 bg-green-50 dark:bg-green-950/40 hover:bg-green-100 dark:hover:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-lg transition-colors font-medium">
-          {adding ? <X size={11} /> : <Plus size={11} />}
-          {adding ? 'Cancel' : 'Add Paycheck'}
-        </button>
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Income</span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider">Planned</span>
       </div>
 
-      {adding && (
-        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl space-y-2">
+      {loading ? (
+        <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-gray-400" /></div>
+      ) : thisMonth.length === 0 ? (
+        <p className="px-4 py-4 text-xs text-gray-400 dark:text-gray-500">No paychecks scheduled this month.</p>
+      ) : (
+        thisMonth.map(({ paycheck, day }, i) => (
+          <div key={`${paycheck.id}-${day}`}
+            className={cn('flex items-center justify-between px-4 py-2.5 group hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors',
+              i > 0 && 'border-t border-gray-100 dark:border-gray-700')}>
+            <span className="text-sm text-gray-700 dark:text-gray-300">{paycheck.source}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-blue-600">{fmt(paycheck.amount)}</span>
+              <button onClick={() => remove(paycheck.id)} aria-label={`Remove ${paycheck.source}`}
+                className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all">
+                <Trash2 size={12} />
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+
+      {adding ? (
+        <div className="px-4 py-3 space-y-2 border-t border-gray-100 dark:border-gray-700">
           <input value={source} onChange={e => setSource(e.target.value)} placeholder="Employer / source"
-            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <div className="flex gap-2">
             <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" inputMode="decimal"
-              className="flex-1 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="flex-1 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <select value={frequency} onChange={e => setFrequency(e.target.value as Paycheck['frequency'])}
-              className="text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="weekly">Weekly</option>
               <option value="biweekly">Every 2 weeks</option>
               <option value="semimonthly">Twice a month</option>
@@ -145,67 +135,24 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
             </select>
           </div>
           <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)}
-            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <button onClick={submitAdd} disabled={saving || !source.trim() || !amount || !nextDate}
-            className="w-full text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] disabled:opacity-50 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-            {saving && <Loader2 size={14} className="animate-spin" />}
-            Save Paycheck
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center py-3"><Loader2 size={16} className="animate-spin text-gray-400" /></div>
-      ) : paychecks.length === 0 ? (
-        <p className="text-xs text-gray-400 dark:text-gray-500">No paychecks scheduled yet. Add one to track upcoming income.</p>
-      ) : (
-        <>
-          {nextPaycheck && (
-            <div className="flex items-center justify-between mb-3 p-2.5 bg-green-50 dark:bg-green-950/30 rounded-lg">
-              <div>
-                <p className="text-xs text-green-700 dark:text-green-400 font-medium">Next paycheck</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmtDate(nextPaycheck.date)} · {fmt(nextPaycheck.amount)}</p>
-              </div>
-              <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                {nextPaycheck.days_until === 0 ? 'Today' : `in ${nextPaycheck.days_until}d`}
-              </span>
-            </div>
-          )}
-          {thisMonth.length > 0 && (
-            <div className="mb-3 p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">
-                  This month's paychecks ({thisMonth.length})
-                </p>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmt(thisMonthTotal)}</p>
-              </div>
-              {onSyncIncome && (
-                <button onClick={syncIncome} disabled={syncing || inSync}
-                  className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs py-1.5 bg-white dark:bg-gray-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-gray-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors font-medium">
-                  {syncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-                  {inSync ? 'Income matches paychecks' : `Set month's income to ${fmt(thisMonthTotal)}`}
-                </button>
-              )}
-            </div>
-          )}
-          <div className="space-y-2">
-            {paychecks.map(p => (
-              <div key={p.id} className="flex items-center justify-between group">
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-700 dark:text-gray-300 truncate font-medium">{p.source}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">{FREQUENCY_LABEL[p.frequency]}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">{fmt(p.amount)}</span>
-                  <button onClick={() => remove(p.id)} aria-label={`Remove ${p.source}`}
-                    className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
+            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="flex gap-2">
+            <button onClick={submitAdd} disabled={saving || !source.trim() || !amount || !nextDate}
+              className="flex-1 text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] disabled:opacity-50 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              Save
+            </button>
+            <button onClick={() => setAdding(false)}
+              className="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors flex items-center gap-1">
+              <X size={12} />Cancel
+            </button>
           </div>
-        </>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)}
+          className="flex items-center gap-1 px-4 py-2.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors border-t border-gray-100 dark:border-gray-700 w-full font-medium">
+          <Plus size={11} /><span>Add Income</span>
+        </button>
       )}
     </div>
   )
