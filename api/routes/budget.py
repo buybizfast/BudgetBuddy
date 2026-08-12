@@ -57,7 +57,7 @@ async def add_category(group_id: str, body: AddCategoryRequest, db: AsyncSession
 @router.get("/transactions")
 async def list_transactions(year: int = Query(...), month: int = Query(...),
                              account_id: Optional[str] = None, category_id: Optional[str] = None,
-                             unassigned: bool = False, limit: int = Query(default=100, le=500),
+                             unassigned: bool = False, limit: int = Query(default=10000, le=10000),
                              offset: int = 0, db: AsyncSession = Depends(get_session)):
     from backend.db.models import BankAccount
     start_date = date(year, month, 1)
