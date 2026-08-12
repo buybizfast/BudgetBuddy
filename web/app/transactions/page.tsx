@@ -17,6 +17,15 @@ interface Transaction {
   category_id: string | null
   category_name: string | null
   pending: boolean
+  personal_finance_category?: string | null
+}
+
+// Credit card payments are transfers (money you already had, moving accounts),
+// not income — don't count or style them like a paycheck/deposit.
+function isTransfer(t: Transaction) {
+  return t.personal_finance_category === 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT'
+    || t.personal_finance_category === 'TRANSFER_OUT_ACCOUNT_TRANSFER'
+    || t.personal_finance_category === 'TRANSFER_IN_ACCOUNT_TRANSFER'
 }
 
 interface Category {
@@ -123,8 +132,8 @@ export default function TransactionsPage() {
   }
 
   const filtered = filter === 'unassigned' ? transactions.filter(t => !t.category_id) : transactions
-  const totalSpent = filtered.filter(t => t.amount > 0 && !t.pending).reduce((s, t) => s + t.amount, 0)
-  const totalIncome = filtered.filter(t => t.amount < 0 && !t.pending).reduce((s, t) => s + Math.abs(t.amount), 0)
+  const totalSpent = filtered.filter(t => t.amount > 0 && !t.pending && !isTransfer(t)).reduce((s, t) => s + t.amount, 0)
+  const totalIncome = filtered.filter(t => t.amount < 0 && !t.pending && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0)
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -318,9 +327,12 @@ export default function TransactionsPage() {
                           <Trash2 size={13} />
                         </button>
                       )}
-                      <span className={cn('text-sm font-semibold whitespace-nowrap text-right', tx.amount < 0 ? 'text-blue-600' : 'text-gray-900 dark:text-gray-100')}>
-                        {tx.amount < 0 ? '+' : ''}{fmt(Math.abs(tx.amount))}
-                      </span>
+                      <div className="text-right shrink-0">
+                        <span className={cn('text-sm font-semibold whitespace-nowrap', isTransfer(tx) ? 'text-gray-500 dark:text-gray-400' : tx.amount < 0 ? 'text-blue-600' : 'text-gray-900 dark:text-gray-100')}>
+                          {tx.amount < 0 && !isTransfer(tx) ? '+' : ''}{fmt(Math.abs(tx.amount))}
+                        </span>
+                        {isTransfer(tx) && <p className="text-[10px] text-gray-400 dark:text-gray-500">Transfer</p>}
+                      </div>
                     </div>
                   </div>
                 )

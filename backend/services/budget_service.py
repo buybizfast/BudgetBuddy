@@ -33,6 +33,19 @@ async def get_or_create_budget_month(year: int, month: int, db: AsyncSession) ->
     )
     bm = result.scalar_one_or_none()
     if bm:
+        # Backfill the Income group for months created before it existed.
+        if not any(g.name == "Income" for g in bm.groups):
+            income_group = BudgetGroup(budget_month_id=bm.id, name="Income", sort_order=-1)
+            db.add(income_group)
+            await db.flush()
+            for cat_idx, cat_name in enumerate(["Paycheck", "Other Income"]):
+                db.add(BudgetCategory(group_id=income_group.id, name=cat_name, budgeted=Decimal("0"), sort_order=cat_idx))
+            await db.commit()
+            result = await db.execute(
+                select(BudgetMonth).where(BudgetMonth.id == bm.id)
+                .options(selectinload(BudgetMonth.groups).selectinload(BudgetGroup.categories))
+            )
+            bm = result.scalar_one()
         return bm
     bm = BudgetMonth(year=year, month=month, total_income=Decimal("0"))
     db.add(bm)
