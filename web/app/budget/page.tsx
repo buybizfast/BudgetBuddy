@@ -218,6 +218,8 @@ export default function BudgetPage() {
           </div>
         ) : (
           <>
+            <PaycheckCard year={year} month={month} totalIncome={budget?.total_income} onSyncIncome={updateIncome} />
+
             {/* Hero summary card */}
             <div className={cn(
               'bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5 flex flex-col sm:flex-row items-center gap-4 sm:gap-0',
@@ -279,8 +281,6 @@ export default function BudgetPage() {
                 </p>
               </div>
             </div>
-
-            <PaycheckCard year={year} month={month} totalIncome={budget?.total_income} onSyncIncome={updateIncome} />
 
             {/* Budget Groups */}
             {budget?.groups.map(group => (

@@ -234,7 +234,9 @@ export default function TodayPage() {
                       <p className="text-xs text-gray-400 dark:text-gray-500">{t.date}</p>
                     </div>
                   </div>
-                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 shrink-0 ml-2">{fmt(t.amount)}</span>
+                  <span className={cn('text-sm font-semibold shrink-0 ml-2', t.amount < 0 ? 'text-blue-600' : 'text-gray-900 dark:text-gray-100')}>
+                    {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount))}
+                  </span>
                 </div>
               ))}
             </div>
