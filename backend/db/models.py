@@ -194,6 +194,22 @@ class BillPayment(Base):
     )
 
 
+class Paycheck(Base):
+    """A recurring income schedule (e.g. biweekly paycheck from an employer)."""
+    __tablename__ = "paychecks"
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    source = Column(String(150), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    frequency = Column(String(20), nullable=False, default="biweekly")  # weekly / biweekly / semimonthly / monthly
+    next_date = Column(Date, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        CheckConstraint("frequency IN ('weekly','biweekly','semimonthly','monthly')", name="ck_paycheck_frequency"),
+    )
+
+
 class NetWorthSnapshot(Base):
     __tablename__ = "net_worth_snapshots"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)

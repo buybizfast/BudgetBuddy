@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useBudget, BudgetGroup, BudgetCategory } from '@/hooks/useBudget'
 import { PageHeader } from '@/components/PageHeader'
+import { PaycheckCard } from '@/components/PaycheckCard'
 import { cn } from '@/lib/utils'
 
 import { apiFetch } from '@/lib/api'
@@ -278,6 +279,8 @@ export default function BudgetPage() {
                 </p>
               </div>
             </div>
+
+            <PaycheckCard />
 
             {/* Budget Groups */}
             {budget?.groups.map(group => (

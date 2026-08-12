@@ -27,6 +27,15 @@ interface PaidRecord {
   notes: string | null
 }
 
+interface PaycheckSchedule {
+  id: string
+  source: string
+  amount: number
+  frequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly'
+  next_date: string
+  active: boolean
+}
+
 const MONTH_NAMES = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
@@ -94,8 +103,33 @@ function billDaysForMonth(sub: Subscription, year: number, month: number): numbe
   return [Math.min(dom, daysInMonth)]
 }
 
+const PAYCHECK_STEP_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, semimonthly: 15 }
+
+function paycheckDaysForMonth(p: PaycheckSchedule, year: number, month: number): number[] {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const base = new Date(p.next_date + 'T00:00:00')
+
+  if (p.frequency === 'monthly') {
+    return [Math.min(base.getDate(), daysInMonth)]
+  }
+
+  const step = PAYCHECK_STEP_DAYS[p.frequency] ?? 14
+  const displayFirst = new Date(year, month - 1, 1)
+  const diffDays = Math.floor((displayFirst.getTime() - base.getTime()) / 86400000)
+  const remainder = ((diffDays % step) + step) % step
+  const firstOccurrence = remainder === 0 ? 1 : step - remainder + 1
+  const days: number[] = []
+  for (let d = firstOccurrence; d <= daysInMonth; d += step) days.push(d)
+  return days
+}
+
 interface BillEntry {
   sub: Subscription
+  day: number
+}
+
+interface PaycheckEntry {
+  paycheck: PaycheckSchedule
   day: number
 }
 
@@ -104,6 +138,7 @@ export default function CalendarPage() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
   const [subs, setSubs] = useState<Subscription[]>([])
+  const [paychecks, setPaychecks] = useState<PaycheckSchedule[]>([])
   const [paidMap, setPaidMap] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -113,11 +148,13 @@ export default function CalendarPage() {
     setLoading(true)
     setError(null)
     try {
-      const [subsData, paidData] = await Promise.all([
+      const [subsData, paidData, paychecksData] = await Promise.all([
         apiFetch<Subscription[]>(`/api/v1/subscriptions/`),
         apiFetch<PaidRecord[]>(`/api/v1/bills/paid?year=${year}&month=${month}`),
+        apiFetch<PaycheckSchedule[]>(`/api/v1/paychecks/`).catch(() => []),
       ])
       setSubs(subsData)
+      setPaychecks(paychecksData.filter(p => p.active))
       const map: Record<string, boolean> = {}
       for (const p of paidData) {
         if (p.paid) map[p.merchant_name] = true
@@ -190,6 +227,19 @@ export default function CalendarPage() {
   const paidCount = allBillsThisMonth.filter(({ sub }) => paidMap[sub.merchant]).length
   const paidTotal = allBillsThisMonth.filter(({ sub }) => paidMap[sub.merchant]).reduce((s, { sub }) => s + sub.amount, 0)
 
+  const paychecksByDay: Record<number, PaycheckEntry[]> = {}
+  for (const p of paychecks) {
+    const days = paycheckDaysForMonth(p, year, month)
+    for (const d of days) {
+      if (!paychecksByDay[d]) paychecksByDay[d] = []
+      paychecksByDay[d].push({ paycheck: p, day: d })
+    }
+  }
+  const allPaychecksThisMonth: PaycheckEntry[] = Object.entries(paychecksByDay)
+    .flatMap(([d, entries]) => entries.map(e => ({ ...e, day: Number(d) })))
+    .sort((a, b) => a.day - b.day)
+  const totalIncomeThisMonth = allPaychecksThisMonth.reduce((sum, { paycheck }) => sum + paycheck.amount, 0)
+
   const daysInMonth = new Date(year, month, 0).getDate()
   const firstDow = new Date(year, month - 1, 1).getDay()
 
@@ -246,6 +296,11 @@ export default function CalendarPage() {
           {' '}{allBillsThisMonth.length === 1 ? 'bill' : 'bills'} in {MONTH_NAMES[month - 1]}:
           <span className="font-bold text-blue-600 ml-1">{fmt0(totalThisMonth)}</span>
         </span>
+        {allPaychecksThisMonth.length > 0 && (
+          <span className="text-green-600 dark:text-green-400 font-medium">
+            💰 {allPaychecksThisMonth.length} paycheck{allPaychecksThisMonth.length !== 1 ? 's' : ''} · {fmt0(totalIncomeThisMonth)}
+          </span>
+        )}
         {paidCount > 0 && (
           <span className="flex items-center gap-1 text-green-600 font-medium">
             <CheckCircle2 size={14} />
@@ -274,6 +329,7 @@ export default function CalendarPage() {
           <div className="grid grid-cols-7">
             {cells.map((day, idx) => {
               const bills = day !== null ? (billsByDay[day] ?? []) : []
+              const paychecksToday = day !== null ? (paychecksByDay[day] ?? []) : []
               const todayCell = isToday(day)
               return (
                 <div
@@ -292,6 +348,15 @@ export default function CalendarPage() {
                       )}>
                         {day}
                       </span>
+                      {paychecksToday.map(({ paycheck }, i) => (
+                        <span
+                          key={`p-${i}`}
+                          title={`${paycheck.source} — ${fmt(paycheck.amount)}`}
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate leading-tight bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400"
+                        >
+                          💰 {fmt(paycheck.amount)}
+                        </span>
+                      ))}
                       {bills.slice(0, 3).map(({ sub }, i) => {
                         const paid = paidMap[sub.merchant]
                         return (
@@ -369,6 +434,31 @@ export default function CalendarPage() {
                 )
               })}
             </ul>
+          )}
+
+          {allPaychecksThisMonth.length > 0 && (
+            <div className="border-t border-gray-200 dark:border-gray-700">
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  💰 Paychecks — {MONTH_NAMES[month - 1]}
+                </p>
+              </div>
+              <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[240px] overflow-y-auto">
+                {allPaychecksThisMonth.map(({ paycheck, day }, i) => (
+                  <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
+                      {MONTH_NAMES[month - 1].slice(0, 3)} {day}
+                    </span>
+                    <span className="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate font-medium">
+                      {paycheck.source}
+                    </span>
+                    <span className="text-sm font-bold text-green-600 dark:text-green-400 shrink-0">
+                      {fmt(paycheck.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700">
