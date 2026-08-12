@@ -124,6 +124,13 @@ async def update_category_budget(category_id: str, budgeted: float, db: AsyncSes
     await db.commit()
 
 
+async def rename_category(category_id: str, name: str, db: AsyncSession) -> None:
+    result = await db.execute(select(BudgetCategory).where(BudgetCategory.id == category_id))
+    cat = result.scalar_one()
+    cat.name = name.strip()
+    await db.commit()
+
+
 async def add_budget_category(group_id: str, name: str, db: AsyncSession) -> BudgetCategory:
     result = await db.execute(select(func.count()).select_from(BudgetCategory).where(BudgetCategory.group_id == group_id))
     count = result.scalar() or 0

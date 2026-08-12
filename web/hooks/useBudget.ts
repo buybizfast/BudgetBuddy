@@ -87,6 +87,11 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
+  const renameCategory = async (id: string, name: string) => {
+    await apiFetch(`/api/v1/budget/categories/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) })
+    await refresh()
+  }
+
   const addCategory = async (groupId: string, name: string) => {
     await apiFetch(`/api/v1/budget/groups/${groupId}/categories`, { method: 'POST', body: JSON.stringify({ name }) })
     await refresh()
@@ -107,5 +112,5 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
-  return { budget, loading, error, refresh, updateIncome, updateCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
+  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
 }

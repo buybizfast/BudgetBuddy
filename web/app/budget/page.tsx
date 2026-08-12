@@ -28,7 +28,7 @@ export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-  const { budget, loading, error, updateIncome, updateCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const { budget, loading, error, updateIncome, updateCategory, renameCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
   const [editingIncome, setEditingIncome] = useState(false)
   const [incomeInput, setIncomeInput] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -304,6 +304,7 @@ export default function BudgetPage() {
                 triggeredAlerts={triggeredAlerts}
                 onUpsertAlert={upsertAlert}
                 onDeleteAlert={deleteAlert}
+                onRename={renameCategory}
               />
             ))}
 
@@ -465,9 +466,10 @@ interface GroupCardProps {
   triggeredAlerts: TriggeredAlert[]
   onUpsertAlert: (catId: string, threshold: number) => void
   onDeleteAlert: (catId: string) => void
+  onRename: (catId: string, name: string) => void
 }
 
-function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert }: GroupCardProps) {
+function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename }: GroupCardProps) {
   const over = group.spent > group.budgeted && group.budgeted > 0
 
   return (
@@ -530,6 +532,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
                 triggered={triggered}
                 onUpsertAlert={onUpsertAlert}
                 onDeleteAlert={onDeleteAlert}
+                onRename={onRename}
               />
             )
           })}
@@ -557,15 +560,25 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
   )
 }
 
-function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert }: {
+function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename }: {
   cat: BudgetCategory; editing: boolean; input: string
   onStartEdit: () => void; onInputChange: (v: string) => void; onSave: () => void
   alert?: SpendingAlert; triggered?: TriggeredAlert
   onUpsertAlert: (catId: string, threshold: number) => void
   onDeleteAlert: (catId: string) => void
+  onRename: (catId: string, name: string) => void
 }) {
   const [showAlertPopover, setShowAlertPopover] = useState(false)
   const [thresholdInput, setThresholdInput] = useState(String(alert?.threshold_pct ?? 80))
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(cat.name)
+
+  const saveName = () => {
+    setEditingName(false)
+    const trimmed = nameInput.trim()
+    if (trimmed && trimmed !== cat.name) onRename(cat.id, trimmed)
+    else setNameInput(cat.name)
+  }
   const pct = cat.budgeted > 0 ? Math.min(100, (cat.spent / cat.budgeted) * 100) : cat.spent > 0 ? 100 : 0
   const over = cat.spent > cat.budgeted && cat.budgeted > 0
   const barColor = over ? 'bg-red-500' : pct >= 85 ? 'bg-amber-400' : 'bg-blue-500'
@@ -576,7 +589,18 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
     <div className="border-t border-gray-100 dark:border-gray-700 group">
       <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-4">
-          <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{cat.name}</span>
+          {editingName ? (
+            <input autoFocus value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(cat.name); setEditingName(false) } }}
+              className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 flex-1" />
+          ) : (
+            <button onClick={() => { setNameInput(cat.name); setEditingName(true) }}
+              className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 truncate text-left transition-colors">
+              {cat.name}
+            </button>
+          )}
           <div className="relative">
             <button
               onClick={() => { setThresholdInput(String(alert?.threshold_pct ?? 80)); setShowAlertPopover(v => !v) }}

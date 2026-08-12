@@ -34,12 +34,16 @@ async def update_income(budget_month_id: str, body: UpdateIncomeRequest, db: Asy
 
 
 class UpdateCategoryRequest(BaseModel):
-    budgeted: float
+    budgeted: Optional[float] = None
+    name: Optional[str] = None
 
 @router.patch("/categories/{category_id}")
 async def update_category(category_id: str, body: UpdateCategoryRequest, db: AsyncSession = Depends(get_session)):
     try:
-        await budget_service.update_category_budget(category_id, body.budgeted, db)
+        if body.budgeted is not None:
+            await budget_service.update_category_budget(category_id, body.budgeted, db)
+        if body.name is not None:
+            await budget_service.rename_category(category_id, body.name, db)
     except Exception:
         raise HTTPException(status_code=404, detail="Category not found")
     return {"status": "ok"}
