@@ -392,7 +392,7 @@ export default function BudgetPage() {
                 <div className="space-y-2">
                   {recurring.slice(0, 8).map((r, i) => (
                     <div key={i} className="flex justify-between items-center">
-                      <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]">{r.name}</span>
+                      <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]">{r.merchant}</span>
                       <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">{fmt2(r.amount)}</span>
                     </div>
                   ))}
