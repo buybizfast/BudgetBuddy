@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from backend.db.models import BudgetCategory, BudgetGroup, BudgetMonth, Transaction
 
 _DEFAULT_GROUPS = [
+    ("Income", ["Paycheck", "Other Income"]),
     ("Giving", ["Tithing", "Charitable Giving"]),
     ("Savings", ["Emergency Fund", "Retirement", "College Fund", "Other Savings"]),
     ("Housing", ["Mortgage/Rent", "Electricity", "Water", "Natural Gas", "Internet", "Cable/Streaming", "Phone"]),
@@ -84,8 +85,12 @@ async def get_budget_month_with_spending(year: int, month: int, db: AsyncSession
         groups_data.append({"id": str(group.id), "name": group.name, "budgeted": float(group_budgeted),
                              "spent": float(group_spent), "remaining": float(group_budgeted - group_spent),
                              "sort_order": group.sort_order, "categories": cats_data})
-        total_budgeted += group_budgeted
-        total_spent += group_spent
+        # The Income group tracks incoming money (paychecks, deposits), not
+        # planned spending — exclude it from the expense-side totals so it
+        # doesn't distort "Left to Budget".
+        if group.name != "Income":
+            total_budgeted += group_budgeted
+            total_spent += group_spent
     total_income = float(bm.total_income or 0)
     return {"id": str(bm.id), "year": bm.year, "month": bm.month, "total_income": total_income,
             "total_budgeted": float(total_budgeted), "total_spent": float(total_spent),

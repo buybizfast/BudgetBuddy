@@ -282,8 +282,8 @@ export default function BudgetPage() {
 
             <PaycheckCard year={year} month={month} totalIncome={budget?.total_income} onSyncIncome={updateIncome} />
 
-            {/* Budget Groups */}
-            {budget?.groups.map(group => (
+            {/* Budget Groups — Income is shown by PaycheckCard above, not as an expense group */}
+            {budget?.groups.filter(g => g.name !== 'Income').map(group => (
               <GroupCard
                 key={group.id}
                 group={group}
@@ -340,7 +340,7 @@ export default function BudgetPage() {
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Spending by Group</h3>
               </div>
               <div className="space-y-2.5">
-                {budget?.groups.map(g => {
+                {budget?.groups.filter(g => g.name !== 'Income').map(g => {
                   const pct = g.budgeted > 0 ? Math.min(100, (g.spent / g.budgeted) * 100) : 0
                   const over = g.spent > g.budgeted && g.budgeted > 0
                   return (
