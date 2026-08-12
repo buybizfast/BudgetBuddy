@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Sun, Moon } from 'lucide-react'
 import { getStoredTheme, applyTheme, type Theme } from '@/lib/theme'
 
@@ -10,10 +11,19 @@ export function ThemeToggle({ className }: { className?: string }) {
   const [theme, setTheme] = useState<Theme>(() =>
     typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   )
+  const pathname = usePathname()
 
   useEffect(() => {
     setTheme(getStoredTheme())
   }, [])
+
+  // Re-apply the saved theme on every route change as a safeguard, in case
+  // client-side navigation ever strips the class off <html>.
+  useEffect(() => {
+    const stored = getStoredTheme()
+    document.documentElement.classList.toggle('dark', stored === 'dark')
+    setTheme(stored)
+  }, [pathname])
 
   const toggle = () => {
     const current: Theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
