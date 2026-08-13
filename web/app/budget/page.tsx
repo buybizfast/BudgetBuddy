@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, RefreshCw, Wand2, Copy,
-  TrendingUp, Sparkles, Repeat2, Loader2, Plus, ChevronDown, X, Bell, Trash2,
+  TrendingUp, Sparkles, Repeat2, Loader2, Plus, ChevronDown, X, Bell, Trash2, GripVertical,
 } from 'lucide-react'
 import { useBudget, BudgetGroup, BudgetCategory } from '@/hooks/useBudget'
 import { PageHeader } from '@/components/PageHeader'
@@ -28,7 +28,7 @@ export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, reorderCategories, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
   const [editingIncome, setEditingIncome] = useState(false)
   const [incomeInput, setIncomeInput] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -332,6 +332,7 @@ export default function BudgetPage() {
                 onRename={renameCategory}
                 onToggleCostType={updateCategoryCostType}
                 onDeleteCategory={deleteCategory}
+                onReorder={reorderCategories}
               />
             ))}
 
@@ -496,10 +497,26 @@ interface GroupCardProps {
   onRename: (catId: string, name: string) => void
   onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
   onDeleteCategory: (catId: string) => void
+  onReorder: (groupId: string, categoryIds: string[]) => void
 }
 
-function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory }: GroupCardProps) {
+function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory, onReorder }: GroupCardProps) {
   const over = group.spent > group.budgeted && group.budgeted > 0
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+
+  const handleDrop = (targetId: string) => {
+    if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return }
+    const ids = group.categories.map(c => c.id)
+    const fromIdx = ids.indexOf(draggedId)
+    const toIdx = ids.indexOf(targetId)
+    if (fromIdx === -1 || toIdx === -1) { setDraggedId(null); setDragOverId(null); return }
+    ids.splice(fromIdx, 1)
+    ids.splice(toIdx, 0, draggedId)
+    onReorder(group.id, ids)
+    setDraggedId(null)
+    setDragOverId(null)
+  }
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
@@ -564,6 +581,12 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
                 onRename={onRename}
                 onToggleCostType={onToggleCostType}
                 onDeleteCategory={onDeleteCategory}
+                isDragging={draggedId === cat.id}
+                isDragOver={dragOverId === cat.id && draggedId !== null && draggedId !== cat.id}
+                onDragStart={() => setDraggedId(cat.id)}
+                onDragEnter={() => setDragOverId(cat.id)}
+                onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
+                onDrop={() => handleDrop(cat.id)}
               />
             )
           })}
@@ -591,7 +614,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
   )
 }
 
-function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory }: {
+function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory, isDragging, isDragOver, onDragStart, onDragEnter, onDragEnd, onDrop }: {
   cat: BudgetCategory; editing: boolean; input: string
   onStartEdit: () => void; onInputChange: (v: string) => void; onSave: () => void
   alert?: SpendingAlert; triggered?: TriggeredAlert
@@ -600,6 +623,8 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
   onRename: (catId: string, name: string) => void
   onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
   onDeleteCategory: (catId: string) => void
+  isDragging: boolean; isDragOver: boolean
+  onDragStart: () => void; onDragEnter: () => void; onDragEnd: () => void; onDrop: () => void
 }) {
   const [showAlertPopover, setShowAlertPopover] = useState(false)
   const [thresholdInput, setThresholdInput] = useState(String(alert?.threshold_pct ?? 80))
@@ -619,9 +644,24 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
   const alertSet = !!alert?.enabled
 
   return (
-    <div className="border-t border-gray-100 dark:border-gray-700 group">
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnter={onDragEnter}
+      onDragOver={e => e.preventDefault()}
+      onDragEnd={onDragEnd}
+      onDrop={e => { e.preventDefault(); onDrop() }}
+      className={cn(
+        'border-t border-gray-100 dark:border-gray-700 group transition-opacity',
+        isDragging && 'opacity-40',
+        isDragOver && 'border-t-2 border-t-blue-500'
+      )}
+    >
       <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-4">
+        <span className="shrink-0 -ml-1 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Drag to reorder">
+          <GripVertical size={13} />
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-1">
           {editingName ? (
             <input autoFocus value={nameInput}
               onChange={e => setNameInput(e.target.value)}

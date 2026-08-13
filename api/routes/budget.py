@@ -72,6 +72,15 @@ async def add_category(group_id: str, body: AddCategoryRequest, db: AsyncSession
     return {"id": str(cat.id), "name": cat.name, "budgeted": 0, "sort_order": cat.sort_order}
 
 
+class ReorderCategoriesRequest(BaseModel):
+    category_ids: list[str]
+
+@router.patch("/groups/{group_id}/categories/reorder")
+async def reorder_categories(group_id: str, body: ReorderCategoriesRequest, db: AsyncSession = Depends(get_session)):
+    await budget_service.reorder_categories(group_id, body.category_ids, db)
+    return {"status": "ok"}
+
+
 @router.get("/transactions")
 async def list_transactions(year: int = Query(...), month: int = Query(...),
                              account_id: Optional[str] = None, category_id: Optional[str] = None,

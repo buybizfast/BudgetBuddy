@@ -156,6 +156,16 @@ async def update_category_cost_type(category_id: str, cost_type: str, db: AsyncS
     await db.commit()
 
 
+async def reorder_categories(group_id: str, category_ids: list[str], db: AsyncSession) -> None:
+    result = await db.execute(select(BudgetCategory).where(BudgetCategory.group_id == group_id))
+    cats_by_id = {str(c.id): c for c in result.scalars().all()}
+    for idx, cat_id in enumerate(category_ids):
+        cat = cats_by_id.get(cat_id)
+        if cat is not None:
+            cat.sort_order = idx
+    await db.commit()
+
+
 async def delete_budget_category(category_id: str, db: AsyncSession) -> None:
     result = await db.execute(select(BudgetCategory).where(BudgetCategory.id == category_id))
     cat = result.scalar_one()
