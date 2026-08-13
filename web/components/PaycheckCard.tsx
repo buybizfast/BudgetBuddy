@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Trash2, Loader2, X } from 'lucide-react'
+import { Plus, Trash2, Loader2, X, Pencil } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,14 @@ interface Paycheck {
   frequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly'
   next_date: string
   active: boolean
+}
+
+interface OccurrenceOverride {
+  id: string
+  paycheck_id: string
+  occurrence_date: string
+  source: string | null
+  amount: number | null
 }
 
 function fmt(n: number) {
@@ -34,17 +42,34 @@ function paycheckDaysForMonth(p: Paycheck, year: number, month: number): number[
   return days
 }
 
-function PaycheckRow({ paycheck, bordered, onRename, onRemove }: {
-  paycheck: Paycheck; bordered: boolean; onRename: (newSource: string) => void; onRemove: () => void
+function isoDate(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function PaycheckRow({ source, amount, edited, bordered, onRenameOccurrence, onEditAmount, onReset, onRemove }: {
+  source: string; amount: number; edited: boolean; bordered: boolean
+  onRenameOccurrence: (newSource: string) => void
+  onEditAmount: (newAmount: number) => void
+  onReset: () => void
+  onRemove: () => void
 }) {
   const [editingName, setEditingName] = useState(false)
-  const [nameInput, setNameInput] = useState(paycheck.source)
+  const [nameInput, setNameInput] = useState(source)
+  const [editingAmount, setEditingAmount] = useState(false)
+  const [amountInput, setAmountInput] = useState(String(amount))
 
   const saveName = () => {
     setEditingName(false)
     const trimmed = nameInput.trim()
-    if (trimmed && trimmed !== paycheck.source) onRename(trimmed)
-    else setNameInput(paycheck.source)
+    if (trimmed && trimmed !== source) onRenameOccurrence(trimmed)
+    else setNameInput(source)
+  }
+
+  const saveAmount = () => {
+    setEditingAmount(false)
+    const parsed = parseFloat(amountInput)
+    if (!isNaN(parsed) && parsed !== amount) onEditAmount(parsed)
+    else setAmountInput(String(amount))
   }
 
   return (
@@ -54,17 +79,35 @@ function PaycheckRow({ paycheck, bordered, onRename, onRemove }: {
         <input autoFocus value={nameInput}
           onChange={e => setNameInput(e.target.value)}
           onBlur={saveName}
-          onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(paycheck.source); setEditingName(false) } }}
+          onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(source); setEditingName(false) } }}
           className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 flex-1" />
       ) : (
-        <button onClick={() => { setNameInput(paycheck.source); setEditingName(true) }}
-          className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-left transition-colors">
-          {paycheck.source}
+        <button onClick={() => { setNameInput(source); setEditingName(true) }}
+          className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-left transition-colors flex items-center gap-1">
+          {source}
+          {edited && <span title="This occurrence has been edited" className="text-[9px] uppercase tracking-wide text-amber-500">edited</span>}
         </button>
       )}
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-sm font-medium text-blue-600">{fmt(paycheck.amount)}</span>
-        <button onClick={onRemove} aria-label={`Remove ${paycheck.source}`}
+        {editingAmount ? (
+          <input autoFocus value={amountInput} inputMode="decimal"
+            onChange={e => setAmountInput(e.target.value)}
+            onBlur={saveAmount}
+            onKeyDown={e => { if (e.key === 'Enter') saveAmount(); if (e.key === 'Escape') { setAmountInput(String(amount)); setEditingAmount(false) } }}
+            className="w-20 text-sm text-right bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        ) : (
+          <button onClick={() => { setAmountInput(String(amount)); setEditingAmount(true) }}
+            className="text-sm font-medium text-blue-600 hover:underline">
+            {fmt(amount)}
+          </button>
+        )}
+        {edited && (
+          <button onClick={onReset} title="Revert this occurrence to the schedule default"
+            className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-amber-500 transition-all">
+            <Pencil size={11} />
+          </button>
+        )}
+        <button onClick={onRemove} aria-label={`Remove ${source}`}
           className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all">
           <Trash2 size={12} />
         </button>
@@ -77,6 +120,7 @@ interface Props { year: number; month: number; totalIncome?: number; onSyncIncom
 
 export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) {
   const [paychecks, setPaychecks] = useState<Paycheck[]>([])
+  const [overrides, setOverrides] = useState<OccurrenceOverride[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -89,8 +133,13 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setPaychecks(await apiFetch<Paycheck[]>('/api/v1/paychecks/'))
-    } catch { setPaychecks([]) }
+      const [p, o] = await Promise.all([
+        apiFetch<Paycheck[]>('/api/v1/paychecks/'),
+        apiFetch<OccurrenceOverride[]>('/api/v1/paychecks/occurrences').catch(() => []),
+      ])
+      setPaychecks(p)
+      setOverrides(o)
+    } catch { setPaychecks([]); setOverrides([]) }
     finally { setLoading(false) }
   }, [])
 
@@ -115,19 +164,35 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
     await load()
   }
 
-  const rename = async (id: string, newSource: string) => {
-    await apiFetch(`/api/v1/paychecks/${id}`, {
+  const editOccurrence = async (paycheckId: string, occurrenceDate: string, body: { source?: string; amount?: number }) => {
+    await apiFetch(`/api/v1/paychecks/${paycheckId}/occurrences/${occurrenceDate}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: newSource }),
+      body: JSON.stringify(body),
     })
     await load()
   }
 
+  const resetOccurrence = async (paycheckId: string, occurrenceDate: string) => {
+    await apiFetch(`/api/v1/paychecks/${paycheckId}/occurrences/${occurrenceDate}`, { method: 'DELETE' })
+    await load()
+  }
+
   const thisMonth = paychecks
-    .flatMap(p => paycheckDaysForMonth(p, year, month).map(day => ({ paycheck: p, day })))
+    .flatMap(p => paycheckDaysForMonth(p, year, month).map(day => {
+      const date = isoDate(year, month, day)
+      const override = overrides.find(o => o.paycheck_id === p.id && o.occurrence_date === date)
+      return {
+        paycheck: p,
+        day,
+        date,
+        source: override?.source ?? p.source,
+        amount: override?.amount ?? p.amount,
+        edited: !!override,
+      }
+    }))
     .sort((a, b) => a.day - b.day)
-  const thisMonthTotal = thisMonth.reduce((sum, { paycheck }) => sum + paycheck.amount, 0)
+  const thisMonthTotal = thisMonth.reduce((sum, o) => sum + o.amount, 0)
 
   // Keep the budget month's income in sync with scheduled paychecks automatically.
   useEffect(() => {
@@ -151,9 +216,12 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
       ) : thisMonth.length === 0 ? (
         <p className="px-4 py-4 text-xs text-gray-400 dark:text-gray-500">No paychecks scheduled this month.</p>
       ) : (
-        thisMonth.map(({ paycheck, day }, i) => (
-          <PaycheckRow key={`${paycheck.id}-${day}`} paycheck={paycheck} bordered={i > 0}
-            onRename={newSource => rename(paycheck.id, newSource)} onRemove={() => remove(paycheck.id)} />
+        thisMonth.map(({ paycheck, day, date, source: occSource, amount: occAmount, edited }, i) => (
+          <PaycheckRow key={`${paycheck.id}-${day}`} source={occSource} amount={occAmount} edited={edited} bordered={i > 0}
+            onRenameOccurrence={newSource => editOccurrence(paycheck.id, date, { source: newSource })}
+            onEditAmount={newAmount => editOccurrence(paycheck.id, date, { amount: newAmount })}
+            onReset={() => resetOccurrence(paycheck.id, date)}
+            onRemove={() => remove(paycheck.id)} />
         ))
       )}
 

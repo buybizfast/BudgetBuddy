@@ -217,6 +217,21 @@ class Paycheck(Base):
     )
 
 
+class PaycheckOccurrenceOverride(Base):
+    """Per-occurrence edit (amount/name) for a generated paycheck occurrence."""
+    __tablename__ = "paycheck_occurrence_overrides"
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    paycheck_id = Column(UUID(as_uuid=False), ForeignKey("paychecks.id", ondelete="CASCADE"), nullable=False)
+    occurrence_date = Column(Date, nullable=False)
+    source = Column(String(150), nullable=True)
+    amount = Column(Numeric(12, 2), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        __import__('sqlalchemy').UniqueConstraint("paycheck_id", "occurrence_date", name="uq_paycheck_occurrence_override"),
+    )
+
+
 class NetWorthSnapshot(Base):
     __tablename__ = "net_worth_snapshots"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
