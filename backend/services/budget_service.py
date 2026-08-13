@@ -83,6 +83,10 @@ async def get_budget_month_with_spending(year: int, month: int, db: AsyncSession
             spending_map[str(cat_id)] = float(total or 0)
     total_budgeted = Decimal("0")
     total_spent = Decimal("0")
+    total_fixed_budgeted = Decimal("0")
+    total_fixed_spent = Decimal("0")
+    total_variable_budgeted = Decimal("0")
+    total_variable_spent = Decimal("0")
     groups_data = []
     for group in bm.groups:
         cats_data = []
@@ -92,9 +96,19 @@ async def get_budget_month_with_spending(year: int, month: int, db: AsyncSession
             spent = Decimal(str(spending_map.get(str(cat.id), 0)))
             remaining = cat.budgeted - spent
             cats_data.append({"id": str(cat.id), "name": cat.name, "budgeted": float(cat.budgeted),
-                               "spent": float(spent), "remaining": float(remaining), "sort_order": cat.sort_order})
+                               "spent": float(spent), "remaining": float(remaining), "sort_order": cat.sort_order,
+                               "cost_type": cat.cost_type})
             group_budgeted += cat.budgeted
             group_spent += spent
+            # The Income group tracks incoming money, not planned spending —
+            # exclude it from the fixed/variable expense breakdown too.
+            if group.name != "Income":
+                if cat.cost_type == "fixed":
+                    total_fixed_budgeted += cat.budgeted
+                    total_fixed_spent += spent
+                else:
+                    total_variable_budgeted += cat.budgeted
+                    total_variable_spent += spent
         groups_data.append({"id": str(group.id), "name": group.name, "budgeted": float(group_budgeted),
                              "spent": float(group_spent), "remaining": float(group_budgeted - group_spent),
                              "sort_order": group.sort_order, "categories": cats_data})
@@ -107,7 +121,9 @@ async def get_budget_month_with_spending(year: int, month: int, db: AsyncSession
     total_income = float(bm.total_income or 0)
     return {"id": str(bm.id), "year": bm.year, "month": bm.month, "total_income": total_income,
             "total_budgeted": float(total_budgeted), "total_spent": float(total_spent),
-            "left_to_budget": total_income - float(total_budgeted), "groups": groups_data}
+            "left_to_budget": total_income - float(total_budgeted), "groups": groups_data,
+            "total_fixed_budgeted": float(total_fixed_budgeted), "total_fixed_spent": float(total_fixed_spent),
+            "total_variable_budgeted": float(total_variable_budgeted), "total_variable_spent": float(total_variable_spent)}
 
 
 async def update_budget_income(budget_month_id: str, income: float, db: AsyncSession) -> None:
@@ -128,6 +144,15 @@ async def rename_category(category_id: str, name: str, db: AsyncSession) -> None
     result = await db.execute(select(BudgetCategory).where(BudgetCategory.id == category_id))
     cat = result.scalar_one()
     cat.name = name.strip()
+    await db.commit()
+
+
+async def update_category_cost_type(category_id: str, cost_type: str, db: AsyncSession) -> None:
+    if cost_type not in ("fixed", "variable"):
+        raise ValueError("cost_type must be 'fixed' or 'variable'")
+    result = await db.execute(select(BudgetCategory).where(BudgetCategory.id == category_id))
+    cat = result.scalar_one()
+    cat.cost_type = cost_type
     await db.commit()
 
 

@@ -17,12 +17,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface BudgetCategory {
   id: string; name: string; budgeted: number; spent: number; remaining: number; sort_order: number
+  cost_type: 'fixed' | 'variable'
 }
 export interface BudgetGroup {
   id: string; name: string; budgeted: number; spent: number; remaining: number; sort_order: number; categories: BudgetCategory[]
 }
 export interface BudgetMonth {
   id: string; year: number; month: number; total_income: number; total_budgeted: number; total_spent: number; left_to_budget: number; groups: BudgetGroup[]
+  total_fixed_budgeted: number; total_fixed_spent: number; total_variable_budgeted: number; total_variable_spent: number
 }
 export interface LiveTransaction {
   name: string; merchant_name: string | null; amount: number; date: string | null; auto_categorized: boolean
@@ -92,6 +94,11 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
+  const updateCategoryCostType = async (id: string, costType: 'fixed' | 'variable') => {
+    await apiFetch(`/api/v1/budget/categories/${id}`, { method: 'PATCH', body: JSON.stringify({ cost_type: costType }) })
+    await refresh()
+  }
+
   const addCategory = async (groupId: string, name: string) => {
     await apiFetch(`/api/v1/budget/groups/${groupId}/categories`, { method: 'POST', body: JSON.stringify({ name }) })
     await refresh()
@@ -112,5 +119,5 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
-  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
+  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, updateCategoryCostType, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
 }

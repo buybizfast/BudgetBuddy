@@ -36,14 +36,19 @@ async def update_income(budget_month_id: str, body: UpdateIncomeRequest, db: Asy
 class UpdateCategoryRequest(BaseModel):
     budgeted: Optional[float] = None
     name: Optional[str] = None
+    cost_type: Optional[str] = None
 
 @router.patch("/categories/{category_id}")
 async def update_category(category_id: str, body: UpdateCategoryRequest, db: AsyncSession = Depends(get_session)):
+    if body.cost_type is not None and body.cost_type not in ("fixed", "variable"):
+        raise HTTPException(status_code=400, detail="cost_type must be 'fixed' or 'variable'")
     try:
         if body.budgeted is not None:
             await budget_service.update_category_budget(category_id, body.budgeted, db)
         if body.name is not None:
             await budget_service.rename_category(category_id, body.name, db)
+        if body.cost_type is not None:
+            await budget_service.update_category_cost_type(category_id, body.cost_type, db)
     except Exception:
         raise HTTPException(status_code=404, detail="Category not found")
     return {"status": "ok"}

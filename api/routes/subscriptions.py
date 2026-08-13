@@ -1,9 +1,12 @@
-"""Subscription manager routes — overlays user status on top of recurring detection."""
+"""Subscription manager routes — overlays user status on top of recurring detection,
+and lets users manually add subscriptions that transaction-pattern detection wouldn't
+otherwise catch (e.g. cash-paid, annual, or not-yet-billed)."""
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db.base import get_session
 from backend.db.models import UserSubscription
 from backend.services.recurring_service import detect_recurring
-from datetime import datetime
 
 router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"])
+
+_CADENCE_DAYS = {"weekly": 7, "biweekly": 14, "monthly": 30, "quarterly": 91, "annual": 365}
 
 
 class SubscriptionUpdate(BaseModel):
@@ -21,25 +25,90 @@ class SubscriptionUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+def _manual_to_dict(sub: UserSubscription) -> dict:
+    expected_days = _CADENCE_DAYS.get(sub.cadence or "monthly", 30)
+    amount = float(sub.amount or 0)
+    return {
+        "merchant": sub.merchant_name,
+        "cadence": sub.cadence or "monthly",
+        "expected_days": expected_days,
+        "amount": amount,
+        "annual_cost": round(amount * (365 / expected_days), 2),
+        "occurrences": 0,
+        "last_seen": None,
+        "next_expected": (sub.next_expected or date.today()).isoformat(),
+        "budget_category_id": None,
+        "status": sub.status,
+        "notes": sub.notes,
+        "is_manual": True,
+    }
+
+
 @router.get("/")
 async def list_subscriptions(months_back: int = 6, db: AsyncSession = Depends(get_session)):
-    """Return detected recurring transactions merged with any user-saved status overrides."""
+    """Return detected recurring transactions merged with any user-saved status
+    overrides, plus manually-added subscriptions. Hidden/removed entries are excluded."""
     detected = await detect_recurring(db, months_back)
 
-    # Load all user overrides
     result = await db.execute(select(UserSubscription))
     overrides: dict[str, UserSubscription] = {u.merchant_name: u for u in result.scalars().all()}
 
     out = []
+    detected_merchants = set()
     for item in detected:
         merchant = item["merchant"]
+        detected_merchants.add(merchant)
         override = overrides.get(merchant)
+        if override and override.hidden:
+            continue
         out.append({
             **item,
             "status": override.status if override else "active",
             "notes": override.notes if override else None,
+            "is_manual": False,
         })
+
+    for merchant, sub in overrides.items():
+        if sub.is_manual and merchant not in detected_merchants and not sub.hidden:
+            out.append(_manual_to_dict(sub))
+
     return out
+
+
+class SubscriptionCreate(BaseModel):
+    merchant: str
+    amount: float
+    cadence: str = "monthly"
+    next_expected: Optional[date] = None
+    notes: Optional[str] = None
+
+
+@router.post("/")
+async def create_subscription(body: SubscriptionCreate, db: AsyncSession = Depends(get_session)):
+    """Manually add a subscription that recurring detection wouldn't otherwise find."""
+    if body.cadence not in _CADENCE_DAYS:
+        raise HTTPException(status_code=400, detail=f"cadence must be one of {list(_CADENCE_DAYS)}")
+    merchant = body.merchant.strip()
+    if not merchant:
+        raise HTTPException(status_code=400, detail="merchant is required")
+
+    result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant))
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        sub = UserSubscription(merchant_name=merchant)
+        db.add(sub)
+    sub.is_manual = True
+    sub.hidden = False
+    sub.amount = body.amount
+    sub.cadence = body.cadence
+    sub.next_expected = body.next_expected or (date.today() + timedelta(days=_CADENCE_DAYS[body.cadence]))
+    if body.notes is not None:
+        sub.notes = body.notes
+    sub.status = sub.status or "active"
+    sub.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(sub)
+    return _manual_to_dict(sub)
 
 
 @router.patch("/{merchant_name:path}")
@@ -57,3 +126,22 @@ async def update_subscription(merchant_name: str, body: SubscriptionUpdate, db: 
     sub.updated_at = datetime.utcnow()
     await db.commit()
     return {"status": sub.status, "notes": sub.notes}
+
+
+@router.delete("/{merchant_name:path}")
+async def remove_subscription(merchant_name: str, db: AsyncSession = Depends(get_session)):
+    """Remove a subscription. Manually-added ones are deleted outright; subscriptions
+    derived from detected transaction patterns are hidden (detection would otherwise
+    keep resurfacing them as long as the matching transactions exist)."""
+    result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant_name))
+    sub = result.scalar_one_or_none()
+    if sub and sub.is_manual:
+        await db.delete(sub)
+    else:
+        if sub is None:
+            sub = UserSubscription(merchant_name=merchant_name)
+            db.add(sub)
+        sub.hidden = True
+        sub.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"status": "ok"}

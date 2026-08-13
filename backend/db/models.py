@@ -108,8 +108,12 @@ class BudgetCategory(Base):
     budgeted = Column(Numeric(12, 2), nullable=False, default=0)
     sort_order = Column(Integer, nullable=False, default=0)
     plaid_categories = Column(JSONB, nullable=False, default=list)
+    cost_type = Column(String(10), nullable=False, default="variable")  # fixed / variable
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        CheckConstraint("cost_type IN ('fixed','variable')", name="ck_budget_category_cost_type"),
+    )
     group = relationship("BudgetGroup", back_populates="categories")
     transactions = relationship("Transaction", back_populates="budget_category")
 
@@ -179,6 +183,13 @@ class UserSubscription(Base):
     merchant_name = Column(String(300), nullable=False, unique=True)
     status = Column(String(20), nullable=False, default="active")  # active / paused / cancelled
     notes = Column(String(500))
+    # Manually-added subscriptions (not derived from detected transaction patterns).
+    is_manual = Column(Boolean, nullable=False, default=False)
+    # When true, this subscription (manual or detected) is hidden from the list.
+    hidden = Column(Boolean, nullable=False, default=False)
+    amount = Column(Numeric(12, 2), nullable=True)
+    cadence = Column(String(20), nullable=True)  # weekly / biweekly / monthly / quarterly / annual
+    next_expected = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 

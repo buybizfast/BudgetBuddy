@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Loader2, AlertCircle } from 'lucide-react'
+import { RefreshCw, Loader2, AlertCircle, Plus, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
@@ -13,12 +13,15 @@ interface Subscription {
   amount: number
   annual_cost: number
   occurrences: number
-  last_seen: string
+  last_seen: string | null
   next_expected: string
   budget_category_id: string | null
   status: string
   notes: string | null
+  is_manual: boolean
 }
+
+const CADENCES = ['weekly', 'biweekly', 'monthly', 'quarterly', 'annual']
 
 type StatusFilter = 'all' | 'active' | 'paused' | 'cancelled'
 
@@ -107,6 +110,13 @@ export default function SubscriptionsPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [updatingMerchant, setUpdatingMerchant] = useState<string | null>(null)
+  const [removingMerchant, setRemovingMerchant] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [newMerchant, setNewMerchant] = useState('')
+  const [newAmount, setNewAmount] = useState('')
+  const [newCadence, setNewCadence] = useState('monthly')
+  const [newNextExpected, setNewNextExpected] = useState('')
 
   const fetchSubs = useCallback(async () => {
     setLoading(true)
@@ -136,6 +146,36 @@ export default function SubscriptionsPage() {
       // silently keep old state
     } finally {
       setUpdatingMerchant(null)
+    }
+  }
+
+  const submitAdd = async () => {
+    if (!newMerchant.trim() || !newAmount) return
+    setSaving(true)
+    try {
+      await apiFetch('/api/v1/subscriptions/', {
+        method: 'POST',
+        body: JSON.stringify({
+          merchant: newMerchant.trim(),
+          amount: parseFloat(newAmount),
+          cadence: newCadence,
+          next_expected: newNextExpected || undefined,
+        }),
+      })
+      setNewMerchant(''); setNewAmount(''); setNewCadence('monthly'); setNewNextExpected(''); setAdding(false)
+      await fetchSubs()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const removeSubscription = async (merchant: string) => {
+    setRemovingMerchant(merchant)
+    try {
+      await apiFetch(`/api/v1/subscriptions/${encodeURIComponent(merchant)}`, { method: 'DELETE' })
+      setSubs(prev => prev.filter(s => s.merchant !== merchant))
+    } finally {
+      setRemovingMerchant(null)
     }
   }
 
@@ -195,23 +235,57 @@ export default function SubscriptionsPage() {
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-1 shadow-sm w-fit">
-        {FILTER_TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key)}
-            className={cn(
-              'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap',
-              filter === tab.key
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Filter tabs + add */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-1 shadow-sm w-fit">
+          {FILTER_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setFilter(tab.key)}
+              className={cn(
+                'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap',
+                filter === tab.key
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setAdding(v => !v)}
+          className="flex items-center gap-1 text-xs px-3 py-2 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-xl font-medium transition-colors">
+          <Plus size={12} />Add Subscription
+        </button>
       </div>
+
+      {adding && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-2">
+          <input value={newMerchant} onChange={e => setNewMerchant(e.target.value)} placeholder="Subscription name (e.g. Netflix)"
+            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="flex gap-2">
+            <input value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="Amount" inputMode="decimal"
+              className="flex-1 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <select value={newCadence} onChange={e => setNewCadence(e.target.value)}
+              className="text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize">
+              {CADENCES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <input type="date" value={newNextExpected} onChange={e => setNewNextExpected(e.target.value)}
+            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="flex gap-2">
+            <button onClick={submitAdd} disabled={saving || !newMerchant.trim() || !newAmount}
+              className="flex-1 text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] disabled:opacity-50 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              Save
+            </button>
+            <button onClick={() => setAdding(false)}
+              className="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors flex items-center gap-1">
+              <X size={12} />Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Subscription list */}
       {filtered.length === 0 ? (
@@ -248,6 +322,9 @@ export default function SubscriptionsPage() {
                     </p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <CadenceBadge cadence={sub.cadence} />
+                      {sub.is_manual && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">manual</span>
+                      )}
                       {sub.notes && (
                         <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[200px]">{sub.notes}</span>
                       )}
@@ -285,6 +362,15 @@ export default function SubscriptionsPage() {
                     onChange={s => updateStatus(sub.merchant, s)}
                     loading={isUpdating}
                   />
+                  <button
+                    onClick={() => removeSubscription(sub.merchant)}
+                    disabled={removingMerchant === sub.merchant}
+                    aria-label={`Remove ${sub.merchant}`}
+                    title={sub.is_manual ? 'Delete subscription' : 'Hide from this list'}
+                    className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                  >
+                    {removingMerchant === sub.merchant ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  </button>
                 </div>
               </div>
             )

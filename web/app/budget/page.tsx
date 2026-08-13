@@ -28,7 +28,7 @@ export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-  const { budget, loading, error, updateIncome, updateCategory, renameCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
   const [editingIncome, setEditingIncome] = useState(false)
   const [incomeInput, setIncomeInput] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -282,6 +282,31 @@ export default function BudgetPage() {
 
             <PaycheckCard year={year} month={month} totalIncome={budget?.total_income} onSyncIncome={updateIncome} />
 
+            {/* Fixed vs Variable costs */}
+            {budget && (budget.total_fixed_budgeted > 0 || budget.total_variable_budgeted > 0) && (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">Fixed vs Variable</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Fixed</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{fmt(budget.total_fixed_spent)}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">of {fmt(budget.total_fixed_budgeted)} budgeted</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Variable</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{fmt(budget.total_variable_spent)}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">of {fmt(budget.total_variable_budgeted)} budgeted</p>
+                  </div>
+                </div>
+                {(budget.total_fixed_budgeted + budget.total_variable_budgeted) > 0 && (
+                  <div className="mt-3 h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden flex">
+                    <div className="bg-blue-500 h-full" style={{ width: `${(budget.total_fixed_budgeted / (budget.total_fixed_budgeted + budget.total_variable_budgeted)) * 100}%` }} />
+                    <div className="bg-amber-400 h-full" style={{ width: `${(budget.total_variable_budgeted / (budget.total_fixed_budgeted + budget.total_variable_budgeted)) * 100}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Budget Groups — Income is shown by PaycheckCard above, not as an expense group */}
             {budget?.groups.filter(g => g.name !== 'Income').map(group => (
               <GroupCard
@@ -305,6 +330,7 @@ export default function BudgetPage() {
                 onUpsertAlert={upsertAlert}
                 onDeleteAlert={deleteAlert}
                 onRename={renameCategory}
+                onToggleCostType={updateCategoryCostType}
               />
             ))}
 
@@ -467,9 +493,10 @@ interface GroupCardProps {
   onUpsertAlert: (catId: string, threshold: number) => void
   onDeleteAlert: (catId: string) => void
   onRename: (catId: string, name: string) => void
+  onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
 }
 
-function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename }: GroupCardProps) {
+function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType }: GroupCardProps) {
   const over = group.spent > group.budgeted && group.budgeted > 0
 
   return (
@@ -533,6 +560,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
                 onUpsertAlert={onUpsertAlert}
                 onDeleteAlert={onDeleteAlert}
                 onRename={onRename}
+                onToggleCostType={onToggleCostType}
               />
             )
           })}
@@ -560,13 +588,14 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
   )
 }
 
-function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename }: {
+function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType }: {
   cat: BudgetCategory; editing: boolean; input: string
   onStartEdit: () => void; onInputChange: (v: string) => void; onSave: () => void
   alert?: SpendingAlert; triggered?: TriggeredAlert
   onUpsertAlert: (catId: string, threshold: number) => void
   onDeleteAlert: (catId: string) => void
   onRename: (catId: string, name: string) => void
+  onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
 }) {
   const [showAlertPopover, setShowAlertPopover] = useState(false)
   const [thresholdInput, setThresholdInput] = useState(String(alert?.threshold_pct ?? 80))
@@ -601,6 +630,18 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
               {cat.name}
             </button>
           )}
+          <button
+            onClick={() => onToggleCostType(cat.id, cat.cost_type === 'fixed' ? 'variable' : 'fixed')}
+            title="Click to toggle fixed / variable"
+            className={cn(
+              'shrink-0 text-[9px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded-full border transition-colors',
+              cat.cost_type === 'fixed'
+                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border-blue-100 dark:border-blue-900'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-100 dark:border-amber-900'
+            )}
+          >
+            {cat.cost_type}
+          </button>
           <div className="relative">
             <button
               onClick={() => { setThresholdInput(String(alert?.threshold_pct ?? 80)); setShowAlertPopover(v => !v) }}
