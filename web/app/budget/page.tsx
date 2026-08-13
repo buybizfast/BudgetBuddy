@@ -280,8 +280,6 @@ export default function BudgetPage() {
               </div>
             </div>
 
-            <PaycheckCard year={year} month={month} totalIncome={budget?.total_income} onSyncIncome={updateIncome} />
-
             {/* Fixed vs Variable costs */}
             {budget && (budget.total_fixed_budgeted > 0 || budget.total_variable_budgeted > 0) && (
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
@@ -306,6 +304,8 @@ export default function BudgetPage() {
                 )}
               </div>
             )}
+
+            <PaycheckCard year={year} month={month} totalIncome={budget?.total_income} onSyncIncome={updateIncome} />
 
             {/* Budget Groups — Income is shown by PaycheckCard above, not as an expense group */}
             {budget?.groups.filter(g => g.name !== 'Income').map(group => (
