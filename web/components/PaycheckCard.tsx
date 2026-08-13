@@ -85,7 +85,6 @@ function PaycheckRow({ source, amount, edited, bordered, onRenameOccurrence, onE
         <button onClick={() => { setNameInput(source); setEditingName(true) }}
           className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-left transition-colors flex items-center gap-1">
           {source}
-          {edited && <span title="This occurrence has been edited" className="text-[9px] uppercase tracking-wide text-amber-500">edited</span>}
         </button>
       )}
       <div className="flex items-center gap-2 shrink-0">
