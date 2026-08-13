@@ -156,6 +156,13 @@ async def update_category_cost_type(category_id: str, cost_type: str, db: AsyncS
     await db.commit()
 
 
+async def delete_budget_category(category_id: str, db: AsyncSession) -> None:
+    result = await db.execute(select(BudgetCategory).where(BudgetCategory.id == category_id))
+    cat = result.scalar_one()
+    await db.delete(cat)
+    await db.commit()
+
+
 async def add_budget_category(group_id: str, name: str, db: AsyncSession) -> BudgetCategory:
     result = await db.execute(select(func.count()).select_from(BudgetCategory).where(BudgetCategory.group_id == group_id))
     count = result.scalar() or 0

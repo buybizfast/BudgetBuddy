@@ -54,6 +54,15 @@ async def update_category(category_id: str, body: UpdateCategoryRequest, db: Asy
     return {"status": "ok"}
 
 
+@router.delete("/categories/{category_id}")
+async def delete_category(category_id: str, db: AsyncSession = Depends(get_session)):
+    try:
+        await budget_service.delete_budget_category(category_id, db)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"status": "ok"}
+
+
 class AddCategoryRequest(BaseModel):
     name: str
 

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, RefreshCw, Wand2, Copy,
-  TrendingUp, Sparkles, Repeat2, Loader2, Plus, ChevronDown, X, Bell,
+  TrendingUp, Sparkles, Repeat2, Loader2, Plus, ChevronDown, X, Bell, Trash2,
 } from 'lucide-react'
 import { useBudget, BudgetGroup, BudgetCategory } from '@/hooks/useBudget'
 import { PageHeader } from '@/components/PageHeader'
@@ -28,7 +28,7 @@ export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
   const [editingIncome, setEditingIncome] = useState(false)
   const [incomeInput, setIncomeInput] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -331,6 +331,7 @@ export default function BudgetPage() {
                 onDeleteAlert={deleteAlert}
                 onRename={renameCategory}
                 onToggleCostType={updateCategoryCostType}
+                onDeleteCategory={deleteCategory}
               />
             ))}
 
@@ -494,9 +495,10 @@ interface GroupCardProps {
   onDeleteAlert: (catId: string) => void
   onRename: (catId: string, name: string) => void
   onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
+  onDeleteCategory: (catId: string) => void
 }
 
-function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType }: GroupCardProps) {
+function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory }: GroupCardProps) {
   const over = group.spent > group.budgeted && group.budgeted > 0
 
   return (
@@ -561,6 +563,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
                 onDeleteAlert={onDeleteAlert}
                 onRename={onRename}
                 onToggleCostType={onToggleCostType}
+                onDeleteCategory={onDeleteCategory}
               />
             )
           })}
@@ -588,7 +591,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
   )
 }
 
-function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType }: {
+function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory }: {
   cat: BudgetCategory; editing: boolean; input: string
   onStartEdit: () => void; onInputChange: (v: string) => void; onSave: () => void
   alert?: SpendingAlert; triggered?: TriggeredAlert
@@ -596,6 +599,7 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
   onDeleteAlert: (catId: string) => void
   onRename: (catId: string, name: string) => void
   onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
+  onDeleteCategory: (catId: string) => void
 }) {
   const [showAlertPopover, setShowAlertPopover] = useState(false)
   const [thresholdInput, setThresholdInput] = useState(String(alert?.threshold_pct ?? 80))
@@ -630,18 +634,21 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
               {cat.name}
             </button>
           )}
-          <button
-            onClick={() => onToggleCostType(cat.id, cat.cost_type === 'fixed' ? 'variable' : 'fixed')}
-            title="Click to toggle fixed / variable"
+          <select
+            value={cat.cost_type}
+            onChange={e => onToggleCostType(cat.id, e.target.value as 'fixed' | 'variable')}
+            title="Fixed or variable cost"
             className={cn(
-              'shrink-0 text-[9px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded-full border transition-colors',
+              'shrink-0 text-[10px] uppercase tracking-wide font-medium rounded-full border pl-1.5 pr-4 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none bg-no-repeat',
               cat.cost_type === 'fixed'
                 ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border-blue-100 dark:border-blue-900'
                 : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-100 dark:border-amber-900'
             )}
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='currentColor' stroke-width='1.5' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E")`, backgroundPosition: 'right 2px center', backgroundSize: '9px' }}
           >
-            {cat.cost_type}
-          </button>
+            <option value="fixed">fixed</option>
+            <option value="variable">variable</option>
+          </select>
           <div className="relative">
             <button
               onClick={() => { setThresholdInput(String(alert?.threshold_pct ?? 80)); setShowAlertPopover(v => !v) }}
@@ -707,6 +714,12 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
           <span className={cn('text-xs w-20 text-right font-semibold', cat.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600')}>
             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(cat.remaining)}
           </span>
+          <button
+            onClick={() => { if (confirm(`Delete "${cat.name}"? This can't be undone.`)) onDeleteCategory(cat.id) }}
+            aria-label={`Delete ${cat.name}`}
+            className="ml-2 opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all shrink-0">
+            <Trash2 size={12} />
+          </button>
         </div>
       </div>
       {/* Progress bar */}

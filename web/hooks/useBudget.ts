@@ -99,6 +99,11 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
+  const deleteCategory = async (id: string) => {
+    await apiFetch(`/api/v1/budget/categories/${id}`, { method: 'DELETE' })
+    await refresh()
+  }
+
   const addCategory = async (groupId: string, name: string) => {
     await apiFetch(`/api/v1/budget/groups/${groupId}/categories`, { method: 'POST', body: JSON.stringify({ name }) })
     await refresh()
@@ -119,5 +124,5 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
-  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, updateCategoryCostType, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
+  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
 }
