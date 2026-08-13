@@ -25,8 +25,22 @@ from api.routes import report as report_router
 from api.routes import coach as coach_router
 from api.routes import paychecks as paychecks_router
 from api.ws_manager import ws_manager
+from sqlalchemy import text
+
 from backend.db.base import engine, session_scope
 from backend.db.models import Base
+
+# create_all() only creates missing tables — it never alters existing ones. Columns
+# added to a model after its table already exists in a deployed database need an
+# explicit, idempotent ALTER here so the deployed schema stays in sync.
+_SCHEMA_PATCHES = [
+    "ALTER TABLE budget_categories ADD COLUMN IF NOT EXISTS cost_type VARCHAR(10) NOT NULL DEFAULT 'variable'",
+    "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS is_manual BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2)",
+    "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS cadence VARCHAR(20)",
+    "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS next_expected DATE",
+]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -39,6 +53,8 @@ log = logging.getLogger("api.main")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        for stmt in _SCHEMA_PATCHES:
+            await conn.execute(text(stmt))
     log.info("Database tables created/verified")
 
     async def budget_sync_loop() -> None:
