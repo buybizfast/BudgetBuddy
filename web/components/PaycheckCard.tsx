@@ -34,6 +34,45 @@ function paycheckDaysForMonth(p: Paycheck, year: number, month: number): number[
   return days
 }
 
+function PaycheckRow({ paycheck, bordered, onRename, onRemove }: {
+  paycheck: Paycheck; bordered: boolean; onRename: (newSource: string) => void; onRemove: () => void
+}) {
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(paycheck.source)
+
+  const saveName = () => {
+    setEditingName(false)
+    const trimmed = nameInput.trim()
+    if (trimmed && trimmed !== paycheck.source) onRename(trimmed)
+    else setNameInput(paycheck.source)
+  }
+
+  return (
+    <div className={cn('flex items-center justify-between px-4 py-2.5 group hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors',
+      bordered && 'border-t border-gray-100 dark:border-gray-700')}>
+      {editingName ? (
+        <input autoFocus value={nameInput}
+          onChange={e => setNameInput(e.target.value)}
+          onBlur={saveName}
+          onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(paycheck.source); setEditingName(false) } }}
+          className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 flex-1" />
+      ) : (
+        <button onClick={() => { setNameInput(paycheck.source); setEditingName(true) }}
+          className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-left transition-colors">
+          {paycheck.source}
+        </button>
+      )}
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-sm font-medium text-blue-600">{fmt(paycheck.amount)}</span>
+        <button onClick={onRemove} aria-label={`Remove ${paycheck.source}`}
+          className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all">
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface Props { year: number; month: number; totalIncome?: number; onSyncIncome?: (amount: number) => Promise<void> }
 
 export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) {
@@ -76,6 +115,15 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
     await load()
   }
 
+  const rename = async (id: string, newSource: string) => {
+    await apiFetch(`/api/v1/paychecks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: newSource }),
+    })
+    await load()
+  }
+
   const thisMonth = paychecks
     .flatMap(p => paycheckDaysForMonth(p, year, month).map(day => ({ paycheck: p, day })))
     .sort((a, b) => a.day - b.day)
@@ -104,18 +152,8 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
         <p className="px-4 py-4 text-xs text-gray-400 dark:text-gray-500">No paychecks scheduled this month.</p>
       ) : (
         thisMonth.map(({ paycheck, day }, i) => (
-          <div key={`${paycheck.id}-${day}`}
-            className={cn('flex items-center justify-between px-4 py-2.5 group hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors',
-              i > 0 && 'border-t border-gray-100 dark:border-gray-700')}>
-            <span className="text-sm text-gray-700 dark:text-gray-300">{paycheck.source}</span>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-blue-600">{fmt(paycheck.amount)}</span>
-              <button onClick={() => remove(paycheck.id)} aria-label={`Remove ${paycheck.source}`}
-                className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all">
-                <Trash2 size={12} />
-              </button>
-            </div>
-          </div>
+          <PaycheckRow key={`${paycheck.id}-${day}`} paycheck={paycheck} bordered={i > 0}
+            onRename={newSource => rename(paycheck.id, newSource)} onRemove={() => remove(paycheck.id)} />
         ))
       )}
 
