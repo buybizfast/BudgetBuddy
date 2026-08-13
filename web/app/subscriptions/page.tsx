@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Loader2, AlertCircle, Plus, Trash2, X } from 'lucide-react'
+import { RefreshCw, Loader2, AlertCircle, Plus, Trash2, X, RotateCcw, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
@@ -117,6 +117,10 @@ export default function SubscriptionsPage() {
   const [newAmount, setNewAmount] = useState('')
   const [newCadence, setNewCadence] = useState('monthly')
   const [newNextExpected, setNewNextExpected] = useState('')
+  const [deletedSubs, setDeletedSubs] = useState<Subscription[]>([])
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [loadingDeleted, setLoadingDeleted] = useState(false)
+  const [restoringMerchant, setRestoringMerchant] = useState<string | null>(null)
 
   const fetchSubs = useCallback(async () => {
     setLoading(true)
@@ -133,6 +137,25 @@ export default function SubscriptionsPage() {
   }, [])
 
   useEffect(() => { fetchSubs() }, [fetchSubs])
+
+  const fetchDeleted = useCallback(async () => {
+    setLoadingDeleted(true)
+    try {
+      setDeletedSubs(await apiFetch<Subscription[]>('/api/v1/subscriptions/deleted'))
+    } catch {
+      setDeletedSubs([])
+    } finally {
+      setLoadingDeleted(false)
+    }
+  }, [])
+
+  const toggleDeleted = () => {
+    setShowDeleted(v => {
+      const next = !v
+      if (next) fetchDeleted()
+      return next
+    })
+  }
 
   const updateStatus = async (merchant: string, newStatus: string) => {
     setUpdatingMerchant(merchant)
@@ -174,8 +197,20 @@ export default function SubscriptionsPage() {
     try {
       await apiFetch(`/api/v1/subscriptions/${encodeURIComponent(merchant)}`, { method: 'DELETE' })
       setSubs(prev => prev.filter(s => s.merchant !== merchant))
+      if (showDeleted) await fetchDeleted()
     } finally {
       setRemovingMerchant(null)
+    }
+  }
+
+  const restoreSubscription = async (merchant: string) => {
+    setRestoringMerchant(merchant)
+    try {
+      await apiFetch(`/api/v1/subscriptions/${encodeURIComponent(merchant)}/restore`, { method: 'POST' })
+      setDeletedSubs(prev => prev.filter(s => s.merchant !== merchant))
+      await fetchSubs()
+    } finally {
+      setRestoringMerchant(null)
     }
   }
 
@@ -253,11 +288,55 @@ export default function SubscriptionsPage() {
             </button>
           ))}
         </div>
-        <button onClick={() => setAdding(v => !v)}
-          className="flex items-center gap-1 text-xs px-3 py-2 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-xl font-medium transition-colors">
-          <Plus size={12} />Add Subscription
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={toggleDeleted}
+            className={cn(
+              'flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium transition-colors border',
+              showDeleted
+                ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-600'
+                : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+            )}>
+            <RotateCcw size={12} />Recently Deleted
+            {deletedSubs.length > 0 && <span className="text-[10px] bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full">{deletedSubs.length}</span>}
+            <ChevronDown size={12} className={cn('transition-transform', showDeleted && 'rotate-180')} />
+          </button>
+          <button onClick={() => setAdding(v => !v)}
+            className="flex items-center gap-1 text-xs px-3 py-2 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-xl font-medium transition-colors">
+            <Plus size={12} />Add Subscription
+          </button>
+        </div>
       </div>
+
+      {/* Recently deleted */}
+      {showDeleted && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">Recently Deleted</p>
+          {loadingDeleted ? (
+            <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-gray-400" /></div>
+          ) : deletedSubs.length === 0 ? (
+            <p className="text-xs text-gray-400 dark:text-gray-500">Nothing deleted recently.</p>
+          ) : (
+            <div className="space-y-2">
+              {deletedSubs.map(sub => (
+                <div key={sub.merchant} className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{sub.merchant}</p>
+                    <CadenceBadge cadence={sub.cadence} />
+                    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{fmt(sub.amount)}</span>
+                  </div>
+                  <button
+                    onClick={() => restoreSubscription(sub.merchant)}
+                    disabled={restoringMerchant === sub.merchant}
+                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-gray-300 rounded-lg font-medium transition-colors disabled:opacity-50 shrink-0">
+                    {restoringMerchant === sub.merchant ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {adding && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-2">

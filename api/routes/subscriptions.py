@@ -130,18 +130,48 @@ async def update_subscription(merchant_name: str, body: SubscriptionUpdate, db: 
 
 @router.delete("/{merchant_name:path}")
 async def remove_subscription(merchant_name: str, db: AsyncSession = Depends(get_session)):
-    """Remove a subscription. Manually-added ones are deleted outright; subscriptions
-    derived from detected transaction patterns are hidden (detection would otherwise
-    keep resurfacing them as long as the matching transactions exist)."""
+    """Remove a subscription by hiding it — this keeps it recoverable via the
+    'recently deleted' list instead of losing the record outright."""
     result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant_name))
     sub = result.scalar_one_or_none()
-    if sub and sub.is_manual:
-        await db.delete(sub)
-    else:
-        if sub is None:
-            sub = UserSubscription(merchant_name=merchant_name)
-            db.add(sub)
-        sub.hidden = True
-        sub.updated_at = datetime.utcnow()
+    if sub is None:
+        sub = UserSubscription(merchant_name=merchant_name)
+        db.add(sub)
+    sub.hidden = True
+    sub.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.get("/deleted")
+async def list_deleted_subscriptions(months_back: int = 6, db: AsyncSession = Depends(get_session)):
+    """Return subscriptions the user has removed, so they can be restored."""
+    detected = await detect_recurring(db, months_back)
+    detected_by_merchant = {item["merchant"]: item for item in detected}
+
+    result = await db.execute(select(UserSubscription).where(UserSubscription.hidden == True))  # noqa: E712
+    hidden = result.scalars().all()
+
+    out = []
+    for sub in hidden:
+        item = detected_by_merchant.get(sub.merchant_name)
+        if item:
+            out.append({**item, "status": sub.status, "notes": sub.notes, "is_manual": False})
+        elif sub.is_manual:
+            out.append(_manual_to_dict(sub))
+        # Otherwise: hidden override with no detected pattern and not manual —
+        # stale record (e.g. transactions aged out); nothing to show/restore.
+    return out
+
+
+@router.post("/{merchant_name:path}/restore")
+async def restore_subscription(merchant_name: str, db: AsyncSession = Depends(get_session)):
+    """Unhide a previously-removed subscription."""
+    result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant_name))
+    sub = result.scalar_one_or_none()
+    if sub is None or not sub.hidden:
+        raise HTTPException(status_code=404, detail="No deleted subscription found for that merchant")
+    sub.hidden = False
+    sub.updated_at = datetime.utcnow()
     await db.commit()
     return {"status": "ok"}
