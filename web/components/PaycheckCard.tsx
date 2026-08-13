@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Trash2, Loader2, X, Pencil } from 'lucide-react'
+import { Plus, Trash2, Loader2, X, Pencil, ChevronDown } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -22,7 +22,7 @@ interface OccurrenceOverride {
 }
 
 function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n)
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
 }
 
 const PAYCHECK_STEP_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, semimonthly: 15 }
@@ -46,8 +46,8 @@ function isoDate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function PaycheckRow({ source, amount, edited, bordered, onRenameOccurrence, onEditAmount, onReset, onRemove }: {
-  source: string; amount: number; edited: boolean; bordered: boolean
+function PaycheckRow({ source, amount, edited, onRenameOccurrence, onEditAmount, onReset, onRemove }: {
+  source: string; amount: number; edited: boolean
   onRenameOccurrence: (newSource: string) => void
   onEditAmount: (newAmount: number) => void
   onReset: () => void
@@ -73,43 +73,51 @@ function PaycheckRow({ source, amount, edited, bordered, onRenameOccurrence, onE
   }
 
   return (
-    <div className={cn('flex items-center justify-between px-4 py-2.5 group hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors',
-      bordered && 'border-t border-gray-100 dark:border-gray-700')}>
-      {editingName ? (
-        <input autoFocus value={nameInput}
-          onChange={e => setNameInput(e.target.value)}
-          onBlur={saveName}
-          onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(source); setEditingName(false) } }}
-          className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 flex-1" />
-      ) : (
-        <button onClick={() => { setNameInput(source); setEditingName(true) }}
-          className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-left transition-colors flex items-center gap-1">
-          {source}
-        </button>
-      )}
-      <div className="flex items-center gap-2 shrink-0">
-        {editingAmount ? (
-          <input autoFocus value={amountInput} inputMode="decimal"
-            onChange={e => setAmountInput(e.target.value)}
-            onBlur={saveAmount}
-            onKeyDown={e => { if (e.key === 'Enter') saveAmount(); if (e.key === 'Escape') { setAmountInput(String(amount)); setEditingAmount(false) } }}
-            className="w-20 text-sm text-right bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-        ) : (
-          <button onClick={() => { setAmountInput(String(amount)); setEditingAmount(true) }}
-            className="text-sm font-medium text-blue-600 hover:underline">
-            {fmt(amount)}
+    <div className="border-t border-gray-100 dark:border-gray-700 group">
+      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-4">
+          {editingName ? (
+            <input autoFocus value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(source); setEditingName(false) } }}
+              className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 flex-1" />
+          ) : (
+            <button onClick={() => { setNameInput(source); setEditingName(true) }}
+              className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 truncate text-left transition-colors">
+              {source}
+            </button>
+          )}
+          {edited && (
+            <button onClick={onReset} title="Revert this occurrence to the schedule default"
+              className="opacity-0 group-hover:opacity-100 shrink-0 text-gray-300 dark:text-gray-600 hover:text-amber-500 transition-all">
+              <Pencil size={11} />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center shrink-0">
+          {editingAmount ? (
+            <div className="flex items-center gap-0.5 w-20 justify-end">
+              <span className="text-gray-400 dark:text-gray-500 text-xs">$</span>
+              <input autoFocus value={amountInput} inputMode="decimal"
+                onChange={e => setAmountInput(e.target.value)}
+                onBlur={saveAmount}
+                onKeyDown={e => { if (e.key === 'Enter') saveAmount(); if (e.key === 'Escape') { setAmountInput(String(amount)); setEditingAmount(false) } }}
+                className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-16 rounded border border-blue-400 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-right" />
+            </div>
+          ) : (
+            <button onClick={() => { setAmountInput(String(amount)); setEditingAmount(true) }}
+              className="text-xs text-blue-600 hover:text-blue-700 w-20 text-right transition-colors font-medium">
+              {fmt(amount)}
+            </button>
+          )}
+          <span className="text-xs w-20 text-right text-gray-400 dark:text-gray-500">—</span>
+          <span className="text-xs w-20 text-right font-semibold text-gray-400 dark:text-gray-500">—</span>
+          <button onClick={onRemove} aria-label={`Remove ${source}`}
+            className="ml-2 opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all shrink-0">
+            <Trash2 size={12} />
           </button>
-        )}
-        {edited && (
-          <button onClick={onReset} title="Revert this occurrence to the schedule default"
-            className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-amber-500 transition-all">
-            <Pencil size={11} />
-          </button>
-        )}
-        <button onClick={onRemove} aria-label={`Remove ${source}`}
-          className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all">
-          <Trash2 size={12} />
-        </button>
+        </div>
       </div>
     </div>
   )
@@ -121,6 +129,7 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
   const [paychecks, setPaychecks] = useState<Paycheck[]>([])
   const [overrides, setOverrides] = useState<OccurrenceOverride[]>([])
   const [loading, setLoading] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [source, setSource] = useState('')
@@ -205,59 +214,96 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Income</span>
-        <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider">Planned</span>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-gray-400" /></div>
-      ) : thisMonth.length === 0 ? (
-        <p className="px-4 py-4 text-xs text-gray-400 dark:text-gray-500">No paychecks scheduled this month.</p>
-      ) : (
-        thisMonth.map(({ paycheck, day, date, source: occSource, amount: occAmount, edited }, i) => (
-          <PaycheckRow key={`${paycheck.id}-${day}`} source={occSource} amount={occAmount} edited={edited} bordered={i > 0}
-            onRenameOccurrence={newSource => editOccurrence(paycheck.id, date, { source: newSource })}
-            onEditAmount={newAmount => editOccurrence(paycheck.id, date, { amount: newAmount })}
-            onReset={() => resetOccurrence(paycheck.id, date)}
-            onRemove={() => remove(paycheck.id)} />
-        ))
-      )}
-
-      {adding ? (
-        <div className="px-4 py-3 space-y-2 border-t border-gray-100 dark:border-gray-700">
-          <input value={source} onChange={e => setSource(e.target.value)} placeholder="Employer / source"
-            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <div className="flex gap-2">
-            <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" inputMode="decimal"
-              className="flex-1 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <select value={frequency} onChange={e => setFrequency(e.target.value as Paycheck['frequency'])}
-              className="text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="weekly">Weekly</option>
-              <option value="biweekly">Every 2 weeks</option>
-              <option value="semimonthly">Twice a month</option>
-              <option value="monthly">Monthly</option>
-            </select>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        aria-controls="income-group"
+        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setCollapsed(v => !v)}
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700"
+        onClick={() => setCollapsed(v => !v)}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <ChevronDown size={14} aria-hidden="true" className={cn('text-gray-400 dark:text-gray-500 shrink-0 transition-transform', collapsed && '-rotate-90')} />
+          <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">Income</span>
+        </div>
+        <div className="flex items-center gap-5 shrink-0 text-xs">
+          <div className="text-right">
+            <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider">Planned</p>
+            <p className="font-semibold text-gray-700 dark:text-gray-300">{fmt(thisMonthTotal)}</p>
           </div>
-          <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)}
-            className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <div className="flex gap-2">
-            <button onClick={submitAdd} disabled={saving || !source.trim() || !amount || !nextDate}
-              className="flex-1 text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] disabled:opacity-50 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-              {saving && <Loader2 size={14} className="animate-spin" />}
-              Save
-            </button>
-            <button onClick={() => setAdding(false)}
-              className="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors flex items-center gap-1">
-              <X size={12} />Cancel
-            </button>
+          <div className="text-right">
+            <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider">Spent</p>
+            <p className="font-semibold text-gray-400 dark:text-gray-500">—</p>
+          </div>
+          <div className="text-right">
+            <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider">Remaining</p>
+            <p className="font-semibold text-blue-600">{fmt(thisMonthTotal)}</p>
           </div>
         </div>
-      ) : (
-        <button onClick={() => setAdding(true)}
-          className="flex items-center gap-1 px-4 py-2.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors border-t border-gray-100 dark:border-gray-700 w-full font-medium">
-          <Plus size={11} /><span>Add Income</span>
-        </button>
+      </div>
+
+      {!collapsed && (
+        <div id="income-group">
+          <div className="flex items-center px-4 py-1.5 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
+            <span className="flex-1 text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-4">Category</span>
+            <div className="flex items-center gap-0 shrink-0">
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-20 text-right">Planned</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-20 text-right">Spent</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-20 text-right">Remaining</span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-gray-400" /></div>
+          ) : thisMonth.length === 0 ? (
+            <p className="px-4 py-4 text-xs text-gray-400 dark:text-gray-500">No paychecks scheduled this month.</p>
+          ) : (
+            thisMonth.map(({ paycheck, day, date, source: occSource, amount: occAmount, edited }) => (
+              <PaycheckRow key={`${paycheck.id}-${day}`} source={occSource} amount={occAmount} edited={edited}
+                onRenameOccurrence={newSource => editOccurrence(paycheck.id, date, { source: newSource })}
+                onEditAmount={newAmount => editOccurrence(paycheck.id, date, { amount: newAmount })}
+                onReset={() => resetOccurrence(paycheck.id, date)}
+                onRemove={() => remove(paycheck.id)} />
+            ))
+          )}
+
+          {adding ? (
+            <div className="px-4 py-3 space-y-2 border-t border-gray-100 dark:border-gray-700">
+              <input value={source} onChange={e => setSource(e.target.value)} placeholder="Employer / source"
+                className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="flex gap-2">
+                <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" inputMode="decimal"
+                  className="flex-1 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <select value={frequency} onChange={e => setFrequency(e.target.value as Paycheck['frequency'])}
+                  className="text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Every 2 weeks</option>
+                  <option value="semimonthly">Twice a month</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)}
+                className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="flex gap-2">
+                <button onClick={submitAdd} disabled={saving || !source.trim() || !amount || !nextDate}
+                  className="flex-1 text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] disabled:opacity-50 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+                  {saving && <Loader2 size={14} className="animate-spin" />}
+                  Save
+                </button>
+                <button onClick={() => setAdding(false)}
+                  className="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors flex items-center gap-1">
+                  <X size={12} />Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setAdding(true)}
+              className="flex items-center gap-1 px-4 py-2.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors border-t border-gray-100 dark:border-gray-700 w-full font-medium">
+              <Plus size={11} /><span>Add Income</span>
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
