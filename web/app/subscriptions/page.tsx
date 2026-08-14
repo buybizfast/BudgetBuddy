@@ -48,19 +48,39 @@ function formatDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+const CADENCE_STYLES: Record<string, string> = {
+  monthly:   'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900',
+  annual:    'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-900',
+  weekly:    'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-900',
+  biweekly:  'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-100 dark:border-teal-900',
+  quarterly: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-100 dark:border-orange-900',
+}
+
 function CadenceBadge({ cadence }: { cadence: string }) {
-  const styles: Record<string, string> = {
-    monthly:   'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900',
-    annual:    'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-900',
-    weekly:    'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-900',
-    biweekly:  'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-100 dark:border-teal-900',
-    quarterly: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-100 dark:border-orange-900',
-  }
-  const cls = styles[cadence] ?? 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+  const cls = CADENCE_STYLES[cadence] ?? 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
   return (
     <span className={cn('inline-block text-xs font-medium px-2 py-0.5 rounded-full border capitalize', cls)}>
       {cadence}
     </span>
+  )
+}
+
+function CadenceSelect({ cadence, onChange, loading }: { cadence: string; onChange: (c: string) => void; loading: boolean }) {
+  const cls = CADENCE_STYLES[cadence] ?? 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+  return (
+    <select
+      value={cadence}
+      disabled={loading}
+      onChange={e => onChange(e.target.value)}
+      title="How often this subscription bills"
+      className={cn(
+        'text-xs font-medium rounded-full border capitalize pl-2 pr-5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none bg-no-repeat disabled:opacity-60',
+        cls
+      )}
+      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='currentColor' stroke-width='1.5' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E")`, backgroundPosition: 'right 4px center', backgroundSize: '9px' }}
+    >
+      {CADENCES.map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
   )
 }
 
@@ -167,6 +187,19 @@ export default function SubscriptionsPage() {
       setSubs(prev => prev.map(s => s.merchant === merchant ? { ...s, status: newStatus } : s))
     } catch {
       // silently keep old state
+    } finally {
+      setUpdatingMerchant(null)
+    }
+  }
+
+  const updateCadence = async (merchant: string, newCadence: string) => {
+    setUpdatingMerchant(merchant)
+    try {
+      await apiFetch(`/api/v1/subscriptions/${encodeURIComponent(merchant)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ cadence: newCadence }),
+      })
+      await fetchSubs()
     } finally {
       setUpdatingMerchant(null)
     }
@@ -400,7 +433,7 @@ export default function SubscriptionsPage() {
                       {sub.merchant}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <CadenceBadge cadence={sub.cadence} />
+                      <CadenceSelect cadence={sub.cadence} loading={updatingMerchant === sub.merchant} onChange={c => updateCadence(sub.merchant, c)} />
                       {sub.is_manual && (
                         <span className="text-xs text-gray-400 dark:text-gray-500">manual</span>
                       )}

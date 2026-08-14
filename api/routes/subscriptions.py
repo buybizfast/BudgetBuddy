@@ -23,6 +23,21 @@ _CADENCE_DAYS = {"weekly": 7, "biweekly": 14, "monthly": 30, "quarterly": 91, "a
 class SubscriptionUpdate(BaseModel):
     status: Optional[str] = None
     notes: Optional[str] = None
+    cadence: Optional[str] = None
+
+
+def _apply_cadence_override(item: dict, override: Optional[UserSubscription]) -> dict:
+    """Apply a user-chosen cadence override on top of a detected pattern, recomputing
+    the days-per-occurrence and annual cost estimate to match."""
+    if not override or not override.cadence or override.cadence == item["cadence"]:
+        return item
+    expected_days = _CADENCE_DAYS[override.cadence]
+    return {
+        **item,
+        "cadence": override.cadence,
+        "expected_days": expected_days,
+        "annual_cost": round(item["amount"] * (365 / expected_days), 2),
+    }
 
 
 def _manual_to_dict(sub: UserSubscription) -> dict:
@@ -62,7 +77,7 @@ async def list_subscriptions(months_back: int = 6, db: AsyncSession = Depends(ge
         if override and override.hidden:
             continue
         out.append({
-            **item,
+            **_apply_cadence_override(item, override),
             "status": override.status if override else "active",
             "notes": override.notes if override else None,
             "is_manual": False,
@@ -113,7 +128,9 @@ async def create_subscription(body: SubscriptionCreate, db: AsyncSession = Depen
 
 @router.patch("/{merchant_name:path}")
 async def update_subscription(merchant_name: str, body: SubscriptionUpdate, db: AsyncSession = Depends(get_session)):
-    """Create or update the user's status override for a subscription."""
+    """Create or update the user's status/notes/cadence override for a subscription."""
+    if body.cadence is not None and body.cadence not in _CADENCE_DAYS:
+        raise HTTPException(status_code=400, detail=f"cadence must be one of {list(_CADENCE_DAYS)}")
     result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant_name))
     sub = result.scalar_one_or_none()
     if sub is None:
@@ -123,9 +140,11 @@ async def update_subscription(merchant_name: str, body: SubscriptionUpdate, db: 
         sub.status = body.status
     if body.notes is not None:
         sub.notes = body.notes
+    if body.cadence is not None:
+        sub.cadence = body.cadence
     sub.updated_at = datetime.utcnow()
     await db.commit()
-    return {"status": sub.status, "notes": sub.notes}
+    return {"status": sub.status, "notes": sub.notes, "cadence": sub.cadence}
 
 
 @router.delete("/{merchant_name:path}")
@@ -156,7 +175,7 @@ async def list_deleted_subscriptions(months_back: int = 6, db: AsyncSession = De
     for sub in hidden:
         item = detected_by_merchant.get(sub.merchant_name)
         if item:
-            out.append({**item, "status": sub.status, "notes": sub.notes, "is_manual": False})
+            out.append({**_apply_cadence_override(item, sub), "status": sub.status, "notes": sub.notes, "is_manual": False})
         elif sub.is_manual:
             out.append(_manual_to_dict(sub))
         # Otherwise: hidden override with no detected pattern and not manual —
