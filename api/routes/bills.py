@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.base import get_session
 from backend.db.models import BillPayment
-from backend.services.recurring_service import detect_recurring
+from api.routes.subscriptions import get_merged_subscriptions
 
 router = APIRouter(prefix="/api/v1/bills", tags=["bills"])
 
@@ -74,36 +74,37 @@ async def mark_paid(body: MarkPaidRequest, db: AsyncSession = Depends(get_sessio
 
 @router.get("/upcoming")
 async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=30), db: AsyncSession = Depends(get_session)):
-    """Return bills due in the next N days that haven't been marked paid."""
+    """Return bills due in the next N days that haven't been marked paid. Sourced
+    from the same merged subscription list as the Subscriptions page, so pausing,
+    cancelling, hiding, or changing the cadence/amount of a subscription is
+    immediately reflected here too."""
     today = date.today()
     cutoff = today + timedelta(days=days_ahead)
     year, month = today.year, today.month
 
-    # Get all detected recurring subscriptions
-    subs = await detect_recurring(db, months_back=6)
+    subs = await get_merged_subscriptions(db, months_back=6)
 
-    # Load paid bills for this month
     result = await db.execute(
         select(BillPayment).where(and_(BillPayment.year == year, BillPayment.month == month, BillPayment.paid == True))
     )
     paid_merchants = {p.merchant_name for p in result.scalars().all()}
 
     upcoming = []
-    days_in_month = (date(year, month % 12 + 1, 1) - timedelta(days=1)).day if month < 12 else 31
-
     for sub in subs:
-        if sub.get("status") == "cancelled":
+        if sub.get("status") in ("cancelled", "paused"):
             continue
         merchant = sub["merchant"]
         if merchant in paid_merchants:
             continue
+        expected_days = sub.get("expected_days") or 30
         try:
-            base = date.fromisoformat(sub["next_expected"])
+            bill_date = date.fromisoformat(sub["next_expected"])
         except Exception:
             continue
-        # Compute bill day for this month
-        bill_day = min(base.day, days_in_month)
-        bill_date = date(year, month, bill_day)
+        # Roll a stale next_expected forward to the next occurrence on/after today,
+        # honoring the subscription's actual cadence (weekly, monthly, etc.).
+        while bill_date < today:
+            bill_date += timedelta(days=expected_days)
         if today <= bill_date <= cutoff:
             upcoming.append({
                 "merchant": merchant,

@@ -59,10 +59,13 @@ def _manual_to_dict(sub: UserSubscription) -> dict:
     }
 
 
-@router.get("/")
-async def list_subscriptions(months_back: int = 6, db: AsyncSession = Depends(get_session)):
-    """Return detected recurring transactions merged with any user-saved status
-    overrides, plus manually-added subscriptions. Hidden/removed entries are excluded."""
+async def get_merged_subscriptions(db: AsyncSession, months_back: int = 6) -> list[dict]:
+    """Detected recurring transactions merged with user overrides (status, notes,
+    cadence), plus manually-added subscriptions — with hidden/removed entries
+    excluded. This is the single source of truth for "what is a live subscription
+    right now" — anything that reads subscriptions/bills should go through this so
+    edits (cadence changes, pauses, deletes, manual additions) are reflected
+    everywhere consistently, not just on the subscriptions page."""
     detected = await detect_recurring(db, months_back)
 
     result = await db.execute(select(UserSubscription))
@@ -88,6 +91,11 @@ async def list_subscriptions(months_back: int = 6, db: AsyncSession = Depends(ge
             out.append(_manual_to_dict(sub))
 
     return out
+
+
+@router.get("/")
+async def list_subscriptions(months_back: int = 6, db: AsyncSession = Depends(get_session)):
+    return await get_merged_subscriptions(db, months_back)
 
 
 class SubscriptionCreate(BaseModel):
