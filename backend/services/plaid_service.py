@@ -162,6 +162,7 @@ async def sync_transactions(item_id: str, db: AsyncSession) -> dict[str, Any]:
         cursor = resp["next_cursor"]
         has_more = resp["has_more"]
     plaid_item.cursor = cursor
+    await _sync_accounts(client, plaid_item, db)
     await db.commit()
     return {"added": added_count, "new_transactions": new_txn_summaries}
 
