@@ -18,8 +18,13 @@ log = logging.getLogger("services.debt")
 
 def _estimate_payoff(balance: float, annual_rate_pct: float, minimum_payment: float) -> dict[str, Any]:
     """Months to pay off at minimum payment only, plus a projected payoff date."""
-    if balance <= 0 or minimum_payment <= 0:
+    if balance <= 0:
         return {"months": 0, "date": date.today().isoformat()}
+    if minimum_payment <= 0:
+        # No minimum payment on record (e.g. Plaid-synced debts, whose
+        # balance/accounts endpoint doesn't provide one) — there's nothing to
+        # project a payoff from, distinct from "balance is already zero".
+        return {"months": None, "date": None}
     monthly_rate = annual_rate_pct / 100 / 12
     if monthly_rate <= 0:
         months = math.ceil(balance / minimum_payment)
@@ -97,6 +102,29 @@ async def sync_debt_from_plaid_account(
         log.info("Updated synced debt account %r balance to %s", name, clamped_balance)
     else:
         log.info("Debt account %r is dismissed — leaving hidden, not updating balance", name)
+
+
+async def apply_liability_snapshot(
+    bank_account_id: str, db: AsyncSession, minimum_payment: Optional[float] = None,
+    interest_rate: Optional[float] = None, due_date_day: Optional[int] = None,
+    statement_date_day: Optional[int] = None,
+) -> None:
+    """Fill in the fields Plaid's /accounts/get can't provide (minimum payment,
+    interest rate, due/statement dates) from a /liabilities/get snapshot, for a
+    debt already auto-created by sync_debt_from_plaid_account. Only touches
+    fields we actually got a value for. Does not commit."""
+    result = await db.execute(select(DebtAccount).where(DebtAccount.bank_account_id == bank_account_id))
+    debt = result.scalar_one_or_none()
+    if debt is None or debt.dismissed:
+        return
+    if minimum_payment is not None:
+        debt.minimum_payment = Decimal(str(minimum_payment))
+    if interest_rate is not None:
+        debt.interest_rate = Decimal(str(interest_rate))
+    if due_date_day is not None:
+        debt.due_date_day = due_date_day
+    if statement_date_day is not None:
+        debt.statement_date_day = statement_date_day
 
 
 async def create_debt(

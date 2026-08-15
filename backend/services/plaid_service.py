@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -50,7 +50,10 @@ def _get_client():
 async def create_link_token(user_id: str = "default-user") -> str:
     client = _get_client()
     kwargs: dict[str, Any] = dict(
-        products=[Products("transactions")],
+        # "liabilities" gives real minimum payment / interest rate / due dates
+        # for credit cards and loans via /liabilities/get — without it, synced
+        # debts only ever get a balance from /accounts/get.
+        products=[Products("transactions"), Products("liabilities")],
         client_name="Budget Buddy",
         country_codes=[CountryCode("US")],
         language="en",
@@ -99,6 +102,7 @@ async def exchange_public_token(public_token: str, db: AsyncSession) -> dict[str
 
     await db.flush()
     await _sync_accounts(client, plaid_item, db)
+    await _sync_liabilities(client, plaid_item, db)
     await db.commit()
     return {"item_id": str(plaid_item.id), "institution_name": institution_name}
 
@@ -152,6 +156,77 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
         await sync_debt_from_plaid_account(bank_account_id, acct_name, current_bal, acct_type, acct_subtype, db)
 
 
+def _day_of_month(date_str: Optional[str]) -> Optional[int]:
+    if not date_str:
+        return None
+    try:
+        return int(str(date_str).split("-")[2])
+    except Exception:
+        return None
+
+
+async def _sync_liabilities(client, plaid_item: PlaidItem, db: AsyncSession) -> None:
+    """Pull minimum payment / interest rate / due dates for synced debts —
+    /accounts/get never provides these, only /liabilities/get does. Requires
+    the "liabilities" product to have been granted at Link time; connections
+    linked before that was requested won't have consent yet and this just
+    logs and no-ops until the user reconnects."""
+    from plaid.model.liabilities_get_request import LiabilitiesGetRequest
+    from backend.services.debt_service import apply_liability_snapshot
+
+    try:
+        response = client.liabilities_get(LiabilitiesGetRequest(access_token=plaid_item.access_token))
+    except Exception as exc:
+        log.info("liabilities_get unavailable for item %s: %s", plaid_item.id, exc)
+        return
+
+    liabilities = response.get("liabilities") or {}
+
+    async def _bank_account_id_for(plaid_account_id: str) -> Optional[str]:
+        result = await db.execute(select(BankAccount).where(BankAccount.account_id == plaid_account_id))
+        acct = result.scalar_one_or_none()
+        return str(acct.id) if acct else None
+
+    for card in liabilities.get("credit") or []:
+        bank_account_id = await _bank_account_id_for(card["account_id"])
+        if not bank_account_id:
+            continue
+        aprs = card.get("aprs") or []
+        apr = next((a.get("apr_percentage") for a in aprs if _plaid_str(a.get("apr_type")) == "purchase_apr"), None)
+        if apr is None and aprs:
+            apr = aprs[0].get("apr_percentage")
+        await apply_liability_snapshot(
+            bank_account_id, db,
+            minimum_payment=card.get("minimum_payment_amount"),
+            interest_rate=apr,
+            due_date_day=_day_of_month(card.get("next_payment_due_date")),
+            statement_date_day=_day_of_month(card.get("last_statement_issue_date")),
+        )
+
+    for loan in liabilities.get("student") or []:
+        bank_account_id = await _bank_account_id_for(loan["account_id"])
+        if not bank_account_id:
+            continue
+        await apply_liability_snapshot(
+            bank_account_id, db,
+            minimum_payment=loan.get("minimum_payment_amount"),
+            interest_rate=loan.get("interest_rate_percentage"),
+            due_date_day=_day_of_month(loan.get("next_payment_due_date")),
+        )
+
+    for mortgage in liabilities.get("mortgage") or []:
+        bank_account_id = await _bank_account_id_for(mortgage["account_id"])
+        if not bank_account_id:
+            continue
+        interest = (mortgage.get("interest_rate") or {}).get("percentage")
+        await apply_liability_snapshot(
+            bank_account_id, db,
+            minimum_payment=mortgage.get("next_monthly_payment"),
+            interest_rate=interest,
+            due_date_day=_day_of_month(mortgage.get("next_payment_due_date")),
+        )
+
+
 async def sync_transactions(item_id: str, db: AsyncSession) -> dict[str, Any]:
     from backend.services.auto_categorizer import auto_assign
     result = await db.execute(select(PlaidItem).where(PlaidItem.id == item_id))
@@ -187,6 +262,7 @@ async def sync_transactions(item_id: str, db: AsyncSession) -> dict[str, Any]:
         has_more = resp["has_more"]
     plaid_item.cursor = cursor
     await _sync_accounts(client, plaid_item, db)
+    await _sync_liabilities(client, plaid_item, db)
     await db.commit()
     return {"added": added_count, "new_transactions": new_txn_summaries}
 
