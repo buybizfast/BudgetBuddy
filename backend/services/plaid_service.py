@@ -231,19 +231,25 @@ async def _upsert_transaction(txn: Any, db: AsyncSession) -> Transaction | None:
 async def refresh_all_items(db: AsyncSession) -> dict[str, Any]:
     from sqlalchemy import update as sa_update
     result = await db.execute(select(PlaidItem).where(PlaidItem.status == "active"))
-    items = result.scalars().all()
+    # Capture plain ids up front — db.rollback() (used below on a per-item
+    # failure) expires every loaded ORM object, and re-touching an expired
+    # attribute on an AsyncSession triggers an implicit lazy-load that isn't
+    # supported outside a greenlet context and crashes the whole request.
+    item_ids = [str(i.id) for i in result.scalars().all()]
     total_added = 0
     all_new_txns: list[dict] = []
-    for item in items:
+    for item_id in item_ids:
         try:
-            summary = await sync_transactions(str(item.id), db)
+            summary = await sync_transactions(item_id, db)
             total_added += summary["added"]
             all_new_txns.extend(summary["new_transactions"])
-            if item.last_sync_error is not None:
-                item.last_sync_error = None
-                await db.commit()
+            await db.execute(
+                sa_update(PlaidItem).where(PlaidItem.id == item_id, PlaidItem.last_sync_error.isnot(None))
+                .values(last_sync_error=None)
+            )
+            await db.commit()
         except Exception as exc:
-            log.error("Failed to sync item %s: %s", item.id, exc)
+            log.error("Failed to sync item %s: %s", item_id, exc)
             # A failed query leaves the shared session's transaction aborted —
             # without rolling back here, every subsequent item in this loop
             # would fail too ("current transaction is aborted"), even if its
@@ -251,10 +257,10 @@ async def refresh_all_items(db: AsyncSession) -> dict[str, Any]:
             await db.rollback()
             try:
                 await db.execute(
-                    sa_update(PlaidItem).where(PlaidItem.id == item.id).values(last_sync_error=str(exc)[:500])
+                    sa_update(PlaidItem).where(PlaidItem.id == item_id).values(last_sync_error=str(exc)[:500])
                 )
                 await db.commit()
             except Exception as record_exc:
-                log.error("Failed to record sync error for item %s: %s", item.id, record_exc)
+                log.error("Failed to record sync error for item %s: %s", item_id, record_exc)
                 await db.rollback()
     return {"total_added": total_added, "new_transactions": all_new_txns}
