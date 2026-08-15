@@ -153,7 +153,7 @@ export default function AccountsPage() {
                           </div>
                         </div>
                         <div className="text-right shrink-0 ml-4">
-                          <p className={cn('text-sm font-semibold', acct.type === 'credit' ? 'text-red-500' : 'text-gray-900 dark:text-gray-100')}>
+                          <p className={cn('text-sm font-semibold', (acct.type === 'credit' || acct.type === 'loan') ? 'text-red-500' : 'text-gray-900 dark:text-gray-100')}>
                             {fmt(acct.current_balance)}
                           </p>
                           {acct.available_balance !== null && acct.available_balance !== acct.current_balance && (
