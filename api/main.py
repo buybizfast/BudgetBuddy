@@ -41,6 +41,17 @@ _SCHEMA_PATCHES = [
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2)",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS cadence VARCHAR(20)",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS next_expected DATE",
+    # debt_accounts: patched defensively for every model column, not just the
+    # newest ones — some deployed databases have a stale copy of this table
+    # predating fields like account_type that have existed in the model for a
+    # while, and create_all() never retrofits an existing table.
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS minimum_payment NUMERIC(12, 2) NOT NULL DEFAULT 0",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS interest_rate NUMERIC(6, 4) NOT NULL DEFAULT 0",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(30) NOT NULL DEFAULT 'loan'",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS due_date_day INTEGER",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS statement_date_day INTEGER",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS is_paid_off BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS bank_account_id UUID REFERENCES bank_accounts(id) ON DELETE SET NULL",
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS dismissed BOOLEAN NOT NULL DEFAULT false",
     "DO $$ BEGIN "
@@ -61,8 +72,15 @@ log = logging.getLogger("api.main")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        for stmt in _SCHEMA_PATCHES:
-            await conn.execute(text(stmt))
+    # Each patch runs in its own transaction — if one fails (e.g. against an
+    # unexpectedly stale table), it must not abort the connection for every
+    # statement after it, which would silently no-op the rest of the patches.
+    for stmt in _SCHEMA_PATCHES:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(stmt))
+        except Exception as exc:
+            log.error("Schema patch failed (%s): %s", stmt[:80], exc)
     log.info("Database tables created/verified")
 
     async def budget_sync_loop() -> None:

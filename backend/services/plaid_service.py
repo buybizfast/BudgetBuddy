@@ -228,4 +228,9 @@ async def refresh_all_items(db: AsyncSession) -> dict[str, Any]:
             all_new_txns.extend(summary["new_transactions"])
         except Exception as exc:
             log.error("Failed to sync item %s: %s", item.id, exc)
+            # A failed query leaves the shared session's transaction aborted —
+            # without rolling back here, every subsequent item in this loop
+            # would fail too ("current transaction is aborted"), even if its
+            # own sync would otherwise have succeeded.
+            await db.rollback()
     return {"total_added": total_added, "new_transactions": all_new_txns}
