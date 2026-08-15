@@ -18,6 +18,7 @@ interface Transaction {
   category_name: string | null
   pending: boolean
   personal_finance_category?: string | null
+  is_bnpl?: boolean
 }
 
 // Credit card payments are transfers (money you already had, moving accounts),
@@ -288,7 +289,15 @@ export default function TransactionsPage() {
                       <span className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-none">{day}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{tx.merchant_name || tx.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{tx.merchant_name || tx.name}</p>
+                        {tx.is_bnpl && (
+                          <span title="Detected as a Buy Now, Pay Later installment payment"
+                            className="shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400">
+                            BNPL
+                          </span>
+                        )}
+                      </div>
                       {tx.category_name && (
                         <p className="text-xs text-blue-600 font-medium">{tx.category_name}</p>
                       )}

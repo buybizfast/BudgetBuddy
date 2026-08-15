@@ -81,6 +81,12 @@ async def reorder_categories(group_id: str, body: ReorderCategoriesRequest, db: 
     return {"status": "ok"}
 
 
+def _is_bnpl_transaction(personal_finance_category: Optional[str]) -> bool:
+    """Plaid tags buy-now-pay-later loan payments under the LOAN_PAYMENTS
+    primary category with a BUY_NOW_PAY_LATER detailed category."""
+    return bool(personal_finance_category) and "BUY_NOW_PAY_LATER" in personal_finance_category
+
+
 @router.get("/transactions")
 async def list_transactions(year: int = Query(...), month: int = Query(...),
                              account_id: Optional[str] = None, category_id: Optional[str] = None,
@@ -106,7 +112,8 @@ async def list_transactions(year: int = Query(...), month: int = Query(...),
              "budget_category_id": str(txn.budget_category_id) if txn.budget_category_id else None,
              "pending": txn.pending, "payment_channel": txn.payment_channel, "logo_url": txn.logo_url,
              "personal_finance_category": txn.personal_finance_category,
-             "is_manual": bool((txn.meta or {}).get("manual"))} for txn, acct_name in result.all()]
+             "is_manual": bool((txn.meta or {}).get("manual")),
+             "is_bnpl": _is_bnpl_transaction(txn.personal_finance_category)} for txn, acct_name in result.all()]
 
 
 class AssignCategoryRequest(BaseModel):

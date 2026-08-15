@@ -39,7 +39,7 @@ async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
     result = await db.execute(
         select(DebtAccount).where(DebtAccount.dismissed == False)  # noqa: E712
         .options(selectinload(DebtAccount.payments))
-        .order_by(DebtAccount.sort_order, DebtAccount.created_at)
+        .order_by(DebtAccount.balance, DebtAccount.created_at)
     )
     return [_serialize(d) for d in result.scalars().all()]
 
