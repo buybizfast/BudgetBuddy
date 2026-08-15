@@ -12,6 +12,7 @@ interface Debt {
   account_type: string; due_date_day: number | null; statement_date_day: number | null
   expected_payoff_months: number | null; expected_payoff_date: string | null
   is_paid_off: boolean; is_synced: boolean
+  total_installments: number | null; installments_paid: number
 }
 
 interface Payment { id: string; amount: number; paid_on: string; note: string | null }
@@ -22,6 +23,7 @@ const ACCOUNT_TYPES = [
   { value: 'student_loan', label: 'Student Loan' },
   { value: 'auto_loan', label: 'Auto Loan' },
   { value: 'personal_loan', label: 'Personal Loan' },
+  { value: 'bnpl', label: 'Buy Now, Pay Later' },
   { value: 'other', label: 'Other' },
 ]
 
@@ -59,7 +61,7 @@ export default function DebtPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({
     name: '', balance: '', interest_rate: '', minimum_payment: '',
-    account_type: 'loan', due_date_day: '', statement_date_day: '',
+    account_type: 'loan', due_date_day: '', statement_date_day: '', total_installments: '',
   })
   const [addingDebt, setAddingDebt] = useState(false)
 
@@ -119,10 +121,11 @@ export default function DebtPage() {
           account_type: addForm.account_type,
           due_date_day: addForm.due_date_day ? parseInt(addForm.due_date_day) : null,
           statement_date_day: addForm.account_type === 'credit_card' && addForm.statement_date_day ? parseInt(addForm.statement_date_day) : null,
+          total_installments: addForm.account_type === 'bnpl' && addForm.total_installments ? parseInt(addForm.total_installments) : null,
         })
       })
       await fetchDebts()
-      setAddForm({ name: '', balance: '', interest_rate: '', minimum_payment: '', account_type: 'loan', due_date_day: '', statement_date_day: '' })
+      setAddForm({ name: '', balance: '', interest_rate: '', minimum_payment: '', account_type: 'loan', due_date_day: '', statement_date_day: '', total_installments: '' })
       setShowAddForm(false)
     } catch {} finally { setAddingDebt(false) }
   }
@@ -224,6 +227,14 @@ export default function DebtPage() {
                       className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
                 )}
+                {addForm.account_type === 'bnpl' && (
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Total Installments</label>
+                    <input type="number" min="1" value={addForm.total_installments} onChange={e => setAddForm(f => ({...f, total_installments: e.target.value}))}
+                      placeholder="e.g. 4"
+                      className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <button onClick={addDebt} disabled={addingDebt}
@@ -265,6 +276,11 @@ export default function DebtPage() {
                           Min. payment: {fmt(debt.minimum_payment)}
                         </p>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {debt.total_installments && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400">
+                              {debt.installments_paid} of {debt.total_installments} payments
+                            </span>
+                          )}
                           {debt.is_synced && (
                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
                               Synced

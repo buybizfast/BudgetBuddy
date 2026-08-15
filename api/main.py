@@ -55,6 +55,8 @@ _SCHEMA_PATCHES = [
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS is_paid_off BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS bank_account_id UUID REFERENCES bank_accounts(id) ON DELETE SET NULL",
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS dismissed BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS total_installments INTEGER",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS installments_paid INTEGER NOT NULL DEFAULT 0",
     "DO $$ BEGIN "
     "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'debt_accounts_bank_account_id_key') THEN "
     "    ALTER TABLE debt_accounts ADD CONSTRAINT debt_accounts_bank_account_id_key UNIQUE (bank_account_id); "

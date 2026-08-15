@@ -102,13 +102,15 @@ async def sync_debt_from_plaid_account(
 async def create_debt(
     name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession,
     account_type: str = "loan", due_date_day: Optional[int] = None, statement_date_day: Optional[int] = None,
+    total_installments: Optional[int] = None,
 ) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
     last = result.scalar_one_or_none()
     sort_order = (last.sort_order + 1) if last else 0
     debt = DebtAccount(name=name, balance=Decimal(str(balance)), minimum_payment=Decimal(str(minimum_payment)),
                        interest_rate=Decimal(str(interest_rate)), sort_order=sort_order,
-                       account_type=account_type, due_date_day=due_date_day, statement_date_day=statement_date_day)
+                       account_type=account_type, due_date_day=due_date_day, statement_date_day=statement_date_day,
+                       total_installments=total_installments)
     db.add(debt)
     await db.commit()
     await db.refresh(debt)
@@ -118,6 +120,7 @@ async def create_debt(
 async def update_debt(
     debt_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession,
     account_type=None, due_date_day=None, statement_date_day=None,
+    total_installments=None, installments_paid=None,
 ) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
     debt = result.scalar_one()
@@ -128,6 +131,8 @@ async def update_debt(
     if account_type is not None: debt.account_type = account_type
     if due_date_day is not None: debt.due_date_day = due_date_day
     if statement_date_day is not None: debt.statement_date_day = statement_date_day
+    if total_installments is not None: debt.total_installments = total_installments
+    if installments_paid is not None: debt.installments_paid = installments_paid
     await db.commit()
     await db.refresh(debt)
     return _serialize(debt)
@@ -154,6 +159,8 @@ async def add_payment(debt_id: str, amount: float, paid_on: date, note: str | No
     debt.balance = Decimal(str(new_balance))
     if new_balance <= 0:
         debt.is_paid_off = True
+    if debt.total_installments:
+        debt.installments_paid = min(debt.installments_paid + 1, debt.total_installments)
     await db.commit()
     await db.refresh(payment)
     return {"id": str(payment.id), "amount": amount, "paid_on": paid_on.isoformat(), "note": note}
@@ -212,5 +219,6 @@ def _serialize(debt: DebtAccount) -> dict[str, Any]:
             "account_type": debt.account_type, "due_date_day": debt.due_date_day, "statement_date_day": debt.statement_date_day,
             "sort_order": debt.sort_order, "is_paid_off": debt.is_paid_off, "total_paid": total_paid,
             "is_synced": debt.bank_account_id is not None,
+            "total_installments": debt.total_installments, "installments_paid": debt.installments_paid,
             "expected_payoff_months": payoff["months"], "expected_payoff_date": payoff["date"],
             "payments": [{"id": str(p.id), "amount": float(p.amount), "paid_on": p.paid_on.isoformat(), "note": p.note} for p in (debt.payments or [])]}

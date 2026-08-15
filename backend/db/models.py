@@ -126,9 +126,13 @@ class DebtAccount(Base):
     balance = Column(Numeric(12, 2), nullable=False)
     minimum_payment = Column(Numeric(12, 2), nullable=False, default=0)
     interest_rate = Column(Numeric(6, 4), nullable=False, default=0)
-    account_type = Column(String(30), nullable=False, default="loan")  # credit_card / loan / student_loan / auto_loan / personal_loan / other
+    account_type = Column(String(30), nullable=False, default="loan")  # credit_card / loan / student_loan / auto_loan / personal_loan / bnpl / other
     due_date_day = Column(Integer, nullable=True)  # day of month payment is due (1-31)
     statement_date_day = Column(Integer, nullable=True)  # credit cards only: statement/reporting day (1-31)
+    # Installment tracking — mainly for BNPL plans (Affirm/Klarna/Afterpay-style),
+    # where progress is naturally "2 of 4 payments" rather than an open-ended balance.
+    total_installments = Column(Integer, nullable=True)
+    installments_paid = Column(Integer, nullable=False, default=0)
     sort_order = Column(Integer, nullable=False, default=0)
     is_paid_off = Column(Boolean, nullable=False, default=False)
     # Set when this debt was auto-created from a synced Plaid credit/loan account,
