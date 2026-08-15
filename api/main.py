@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -62,9 +63,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if not PLAID_CLIENT_ID:
             log.info("Plaid not configured — budget sync loop idle")
             return
-        log.info("Budget sync loop started (interval: %ds)", BUDGET_SYNC_INTERVAL_SECS)
+        log.info("Budget sync loop started (interval: %ds, aligned to wall-clock boundaries)", BUDGET_SYNC_INTERVAL_SECS)
         while True:
-            await asyncio.sleep(BUDGET_SYNC_INTERVAL_SECS)
+            # Sleep until the next wall-clock multiple of the interval (e.g. for the
+            # default 900s/15min interval: :00/:15/:30/:45) instead of drifting from
+            # whenever the process happened to start.
+            await asyncio.sleep(BUDGET_SYNC_INTERVAL_SECS - (time.time() % BUDGET_SYNC_INTERVAL_SECS))
             try:
                 async with session_scope() as db:
                     summary = await refresh_all_items(db)
