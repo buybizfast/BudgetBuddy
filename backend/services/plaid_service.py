@@ -103,6 +103,16 @@ async def exchange_public_token(public_token: str, db: AsyncSession) -> dict[str
     return {"item_id": str(plaid_item.id), "institution_name": institution_name}
 
 
+def _plaid_str(v: Any, default: str | None = None) -> str | None:
+    """Plaid's generated SDK models sometimes wrap enum-like fields (account
+    type/subtype) in small model objects rather than plain strings — prefer
+    `.value` when present instead of trusting str(x) to equal the raw API
+    value, so type comparisons like `== "credit"` don't silently fail."""
+    if v is None:
+        return default
+    return str(getattr(v, "value", v))
+
+
 async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> None:
     from plaid.model.accounts_get_request import AccountsGetRequest
     from backend.services.debt_service import sync_debt_from_plaid_account
@@ -115,8 +125,8 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
         available_bal = balances.get("available")
         if available_bal is not None:
             available_bal = float(available_bal)
-        acct_type = str(acct.get("type", "depository"))
-        acct_subtype = str(acct.get("subtype")) if acct.get("subtype") else None
+        acct_type = _plaid_str(acct.get("type"), "depository")
+        acct_subtype = _plaid_str(acct.get("subtype"))
         acct_name = acct.get("name", "Account")
         if existing:
             existing.current_balance = current_bal
@@ -135,6 +145,8 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
                 current_balance=current_bal, available_balance=available_bal, mask=acct.get("mask"),
                 institution_name=plaid_item.institution_name,
             ))
+        log.info("Plaid account synced: name=%r type=%r subtype=%r balance=%s bank_account_id=%s",
+                 acct_name, acct_type, acct_subtype, current_bal, bank_account_id)
         # Credit cards and loans double as liabilities — keep a matching
         # DebtAccount in sync automatically instead of requiring manual entry.
         await sync_debt_from_plaid_account(bank_account_id, acct_name, current_bal, acct_type, acct_subtype, db)

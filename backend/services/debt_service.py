@@ -1,6 +1,7 @@
 """Debt snowball / avalanche tracker service."""
 from __future__ import annotations
 
+import logging
 import math
 from datetime import date
 from decimal import Decimal
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.db.models import DebtAccount, DebtPayment
+
+log = logging.getLogger("services.debt")
 
 
 def _estimate_payoff(balance: float, annual_rate_pct: float, minimum_payment: float) -> dict[str, Any]:
@@ -83,12 +86,17 @@ async def sync_debt_from_plaid_account(
             name=name, balance=Decimal(str(clamped_balance)), account_type=account_type,
             bank_account_id=bank_account_id, sort_order=sort_order, is_paid_off=clamped_balance <= 0,
         ))
+        log.info("Auto-created debt account %r (type=%s, balance=%s) from bank_account_id=%s",
+                 name, account_type, clamped_balance, bank_account_id)
     elif not debt.dismissed:
         # Keep the balance current, but leave user-entered fields (minimum
         # payment, interest rate, due dates, name) alone — those aren't
         # available from Plaid's accounts endpoint.
         debt.balance = Decimal(str(clamped_balance))
         debt.is_paid_off = clamped_balance <= 0
+        log.info("Updated synced debt account %r balance to %s", name, clamped_balance)
+    else:
+        log.info("Debt account %r is dismissed — leaving hidden, not updating balance", name)
 
 
 async def create_debt(
