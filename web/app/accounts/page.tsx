@@ -163,9 +163,11 @@ export default function AccountsPage() {
                       </div>
                     ))}
                     <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-900">
-                      <span className="text-xs text-gray-400 dark:text-gray-500">Institution Total</span>
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {fmt(accts.reduce((s, a) => s + (a.current_balance ?? 0), 0))}
+                      <span className="text-xs text-gray-400 dark:text-gray-500">Net (Assets − Debt)</span>
+                      <span className={cn('text-xs font-semibold',
+                        accts.reduce((s, a) => s + (a.type === 'credit' || a.type === 'loan' ? -Math.abs(a.current_balance ?? 0) : (a.current_balance ?? 0)), 0) < 0
+                          ? 'text-red-500' : 'text-gray-700 dark:text-gray-300')}>
+                        {fmt(accts.reduce((s, a) => s + (a.type === 'credit' || a.type === 'loan' ? -Math.abs(a.current_balance ?? 0) : (a.current_balance ?? 0)), 0))}
                       </span>
                     </div>
                   </div>
