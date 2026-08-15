@@ -140,7 +140,7 @@ export default function DebtPage() {
   return (
     <div>
       <PageHeader
-        title="Debt Snowball"
+        title="Debt Payoff"
         right={
           <button onClick={() => setShowAddForm(!showAddForm)}
             className="flex items-center gap-1.5 text-xs px-3 py-2 bg-[#1a2e4a] hover:bg-[#162540] rounded-2xl text-white transition-colors font-semibold">
