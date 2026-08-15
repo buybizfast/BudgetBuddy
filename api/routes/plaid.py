@@ -63,7 +63,10 @@ async def list_accounts(db: AsyncSession = Depends(get_session)):
 
 @router.get("/items")
 async def list_items(db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(PlaidItem).where(PlaidItem.status == "active"))
+    # The "manual" item backs the Cash/Manual account for hand-entered
+    # transactions — it's not a real Plaid connection, so it shouldn't appear
+    # as one to disconnect/reconnect.
+    result = await db.execute(select(PlaidItem).where(PlaidItem.status == "active", PlaidItem.item_id != "manual"))
     items = result.scalars().all()
     return [{"id": str(i.id), "institution_name": i.institution_name, "status": i.status,
              "last_sync_error": i.last_sync_error} for i in items]
@@ -75,6 +78,8 @@ async def remove_item(item_id: str, db: AsyncSession = Depends(get_session)):
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+    if item.item_id == "manual":
+        raise HTTPException(status_code=400, detail="Cannot disconnect the manual cash account")
     await db.delete(item)
     await db.commit()
     return {"status": "ok"}

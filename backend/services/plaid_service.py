@@ -230,7 +230,9 @@ async def _upsert_transaction(txn: Any, db: AsyncSession) -> Transaction | None:
 
 async def refresh_all_items(db: AsyncSession) -> dict[str, Any]:
     from sqlalchemy import update as sa_update
-    result = await db.execute(select(PlaidItem).where(PlaidItem.status == "active"))
+    result = await db.execute(
+        select(PlaidItem).where(PlaidItem.status == "active", PlaidItem.item_id != "manual")
+    )
     # Capture plain ids up front — db.rollback() (used below on a per-item
     # failure) expires every loaded ORM object, and re-touching an expired
     # attribute on an AsyncSession triggers an implicit lazy-load that isn't
