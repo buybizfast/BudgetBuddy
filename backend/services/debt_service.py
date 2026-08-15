@@ -34,10 +34,61 @@ def _estimate_payoff(balance: float, annual_rate_pct: float, minimum_payment: fl
 
 async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
     result = await db.execute(
-        select(DebtAccount).options(selectinload(DebtAccount.payments))
+        select(DebtAccount).where(DebtAccount.dismissed == False)  # noqa: E712
+        .options(selectinload(DebtAccount.payments))
         .order_by(DebtAccount.sort_order, DebtAccount.created_at)
     )
     return [_serialize(d) for d in result.scalars().all()]
+
+
+# Maps Plaid's account subtype (within type "credit"/"loan") to this app's
+# account_type buckets. Falls back to "credit_card" for type "credit" and
+# "loan" for type "loan" when the subtype isn't recognized.
+_PLAID_SUBTYPE_TO_DEBT_TYPE = {
+    "credit card": "credit_card",
+    "paypal": "credit_card",
+    "student": "student_loan",
+    "auto": "auto_loan",
+    "consumer": "personal_loan",
+    "mortgage": "loan",
+    "home equity": "loan",
+    "line of credit": "loan",
+    "overdraft": "loan",
+    "business": "loan",
+    "commercial": "loan",
+    "construction": "loan",
+    "loan": "loan",
+}
+
+
+async def sync_debt_from_plaid_account(
+    bank_account_id: str, name: str, balance: float, plaid_type: str,
+    plaid_subtype: Optional[str], db: AsyncSession,
+) -> None:
+    """Auto-create (or keep in sync) a DebtAccount for a linked Plaid credit-card
+    or loan account. No-op for depository/investment accounts. Does not commit —
+    the caller's transaction handles that."""
+    if plaid_type not in ("credit", "loan"):
+        return
+    result = await db.execute(select(DebtAccount).where(DebtAccount.bank_account_id == bank_account_id))
+    debt = result.scalar_one_or_none()
+    clamped_balance = max(balance, 0)
+    if debt is None:
+        default_type = "credit_card" if plaid_type == "credit" else "loan"
+        account_type = _PLAID_SUBTYPE_TO_DEBT_TYPE.get(plaid_subtype or "", default_type)
+        result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
+        last = result.scalar_one_or_none()
+        sort_order = (last.sort_order + 1) if last else 0
+        db.add(DebtAccount(
+            name=name, balance=Decimal(str(clamped_balance)), account_type=account_type,
+            bank_account_id=bank_account_id, sort_order=sort_order, is_paid_off=clamped_balance <= 0,
+        ))
+    elif not debt.dismissed:
+        # Keep the balance current, but leave user-entered fields (minimum
+        # payment, interest rate, due dates, name) alone — those aren't
+        # available from Plaid's accounts endpoint.
+        debt.balance = Decimal(str(clamped_balance))
+        debt.is_paid_off = clamped_balance <= 0
 
 
 async def create_debt(
@@ -76,7 +127,13 @@ async def update_debt(
 
 async def delete_debt(debt_id: str, db: AsyncSession) -> None:
     result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
-    await db.delete(result.scalar_one())
+    debt = result.scalar_one()
+    if debt.bank_account_id:
+        # Auto-created from a linked Plaid account — hide it instead of a hard
+        # delete, so the next sync doesn't just re-add it.
+        debt.dismissed = True
+    else:
+        await db.delete(debt)
     await db.commit()
 
 
@@ -146,5 +203,6 @@ def _serialize(debt: DebtAccount) -> dict[str, Any]:
             "minimum_payment": float(debt.minimum_payment), "interest_rate": float(debt.interest_rate),
             "account_type": debt.account_type, "due_date_day": debt.due_date_day, "statement_date_day": debt.statement_date_day,
             "sort_order": debt.sort_order, "is_paid_off": debt.is_paid_off, "total_paid": total_paid,
+            "is_synced": debt.bank_account_id is not None,
             "expected_payoff_months": payoff["months"], "expected_payoff_date": payoff["date"],
             "payments": [{"id": str(p.id), "amount": float(p.amount), "paid_on": p.paid_on.isoformat(), "note": p.note} for p in (debt.payments or [])]}

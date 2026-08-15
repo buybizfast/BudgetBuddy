@@ -11,7 +11,7 @@ interface Debt {
   interest_rate: number; minimum_payment: number; payments: Payment[]
   account_type: string; due_date_day: number | null; statement_date_day: number | null
   expected_payoff_months: number | null; expected_payoff_date: string | null
-  is_paid_off: boolean
+  is_paid_off: boolean; is_synced: boolean
 }
 
 interface Payment { id: string; amount: number; paid_on: string; note: string | null }
@@ -265,6 +265,11 @@ export default function DebtPage() {
                           Min. payment: {fmt(debt.minimum_payment)}
                         </p>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {debt.is_synced && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
+                              Synced
+                            </span>
+                          )}
                           {debt.due_date_day && (
                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 flex items-center gap-0.5">
                               <CalendarClock size={9} />Due {ordinal(debt.due_date_day)}

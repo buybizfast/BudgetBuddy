@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import date, timedelta
 from typing import Any
 
@@ -104,6 +105,7 @@ async def exchange_public_token(public_token: str, db: AsyncSession) -> dict[str
 
 async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> None:
     from plaid.model.accounts_get_request import AccountsGetRequest
+    from backend.services.debt_service import sync_debt_from_plaid_account
     response = client.accounts_get(AccountsGetRequest(access_token=plaid_item.access_token))
     for acct in response["accounts"]:
         result = await db.execute(select(BankAccount).where(BankAccount.account_id == acct["account_id"]))
@@ -113,19 +115,29 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
         available_bal = balances.get("available")
         if available_bal is not None:
             available_bal = float(available_bal)
+        acct_type = str(acct.get("type", "depository"))
+        acct_subtype = str(acct.get("subtype")) if acct.get("subtype") else None
+        acct_name = acct.get("name", "Account")
         if existing:
             existing.current_balance = current_bal
             existing.available_balance = available_bal
             existing.name = acct.get("name", existing.name)
+            existing.type = acct_type
+            existing.subtype = acct_subtype
+            bank_account_id = existing.id
         else:
+            bank_account_id = str(uuid.uuid4())
             db.add(BankAccount(
+                id=bank_account_id,
                 plaid_item_id=plaid_item.id, account_id=acct["account_id"],
-                name=acct.get("name", "Account"), official_name=acct.get("official_name"),
-                type=str(acct.get("type", "depository")),
-                subtype=str(acct.get("subtype", "checking")) if acct.get("subtype") else None,
+                name=acct_name, official_name=acct.get("official_name"),
+                type=acct_type, subtype=acct_subtype,
                 current_balance=current_bal, available_balance=available_bal, mask=acct.get("mask"),
                 institution_name=plaid_item.institution_name,
             ))
+        # Credit cards and loans double as liabilities — keep a matching
+        # DebtAccount in sync automatically instead of requiring manual entry.
+        await sync_debt_from_plaid_account(bank_account_id, acct_name, current_bal, acct_type, acct_subtype, db)
 
 
 async def sync_transactions(item_id: str, db: AsyncSession) -> dict[str, Any]:

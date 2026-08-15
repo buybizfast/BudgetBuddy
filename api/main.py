@@ -41,6 +41,13 @@ _SCHEMA_PATCHES = [
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2)",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS cadence VARCHAR(20)",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS next_expected DATE",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS bank_account_id UUID REFERENCES bank_accounts(id) ON DELETE SET NULL",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS dismissed BOOLEAN NOT NULL DEFAULT false",
+    "DO $$ BEGIN "
+    "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'debt_accounts_bank_account_id_key') THEN "
+    "    ALTER TABLE debt_accounts ADD CONSTRAINT debt_accounts_bank_account_id_key UNIQUE (bank_account_id); "
+    "  END IF; "
+    "END $$",
 ]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

@@ -130,6 +130,10 @@ class DebtAccount(Base):
     statement_date_day = Column(Integer, nullable=True)  # credit cards only: statement/reporting day (1-31)
     sort_order = Column(Integer, nullable=False, default=0)
     is_paid_off = Column(Boolean, nullable=False, default=False)
+    # Set when this debt was auto-created from a synced Plaid credit/loan account,
+    # so its balance can be kept in sync and it won't be re-created if deleted.
+    bank_account_id = Column(UUID(as_uuid=False), ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True, unique=True)
+    dismissed = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     __table_args__ = (
