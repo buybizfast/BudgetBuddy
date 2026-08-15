@@ -10,7 +10,7 @@ interface Account {
   mask: string | null; institution_name: string | null
 }
 
-interface PlaidItem { id: string; institution_name: string; status: string }
+interface PlaidItem { id: string; institution_name: string; status: string; last_sync_error: string | null }
 
 export function useAccounts() {
   const [accounts, setAccounts] = useState<Account[]>([])

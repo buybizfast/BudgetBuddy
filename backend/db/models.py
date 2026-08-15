@@ -27,6 +27,7 @@ class PlaidItem(Base):
     institution_name = Column(String(200))
     status = Column(String(20), nullable=False, default="active")
     cursor = Column(String(500))
+    last_sync_error = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     accounts = relationship("BankAccount", back_populates="plaid_item", cascade="all, delete-orphan")

@@ -35,6 +35,7 @@ from backend.db.models import Base
 # added to a model after its table already exists in a deployed database need an
 # explicit, idempotent ALTER here so the deployed schema stays in sync.
 _SCHEMA_PATCHES = [
+    "ALTER TABLE plaid_items ADD COLUMN IF NOT EXISTS last_sync_error VARCHAR(500)",
     "ALTER TABLE budget_categories ADD COLUMN IF NOT EXISTS cost_type VARCHAR(10) NOT NULL DEFAULT 'variable'",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS is_manual BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false",

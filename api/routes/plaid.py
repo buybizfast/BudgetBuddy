@@ -65,7 +65,8 @@ async def list_accounts(db: AsyncSession = Depends(get_session)):
 async def list_items(db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(PlaidItem).where(PlaidItem.status == "active"))
     items = result.scalars().all()
-    return [{"id": str(i.id), "institution_name": i.institution_name, "status": i.status} for i in items]
+    return [{"id": str(i.id), "institution_name": i.institution_name, "status": i.status,
+             "last_sync_error": i.last_sync_error} for i in items]
 
 
 @router.delete("/items/{item_id}")

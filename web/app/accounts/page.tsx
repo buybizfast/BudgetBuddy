@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Building2, CreditCard, RefreshCw, Loader2, Trash2, TrendingUp } from 'lucide-react'
+import { Building2, CreditCard, RefreshCw, Loader2, Trash2, TrendingUp, AlertTriangle } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { PlaidLinkButton } from '@/components/PlaidLinkButton'
 import { PageHeader } from '@/components/PageHeader'
@@ -104,9 +104,10 @@ export default function AccountsPage() {
                     <div className="flex items-center gap-2">
                       <Building2 size={15} className="text-gray-500 dark:text-gray-400" />
                       <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{institution}</span>
-                      {item && (
-                        <span className={cn('text-xs px-1.5 py-0.5 rounded-full', item.status === 'good' ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' : 'bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-300')}>
-                          {item.status}
+                      {item?.last_sync_error && (
+                        <span title={item.last_sync_error}
+                          className="text-xs px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-300 flex items-center gap-1">
+                          <AlertTriangle size={10} />Needs reconnect
                         </span>
                       )}
                     </div>
@@ -132,6 +133,11 @@ export default function AccountsPage() {
                       </div>
                     )}
                   </div>
+                  {item?.last_sync_error && (
+                    <div className="px-4 py-2.5 bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900 text-xs text-red-700 dark:text-red-300">
+                      Sync is failing for this connection — disconnect and reconnect via "Connect Bank" to fix it.
+                    </div>
+                  )}
                   <div className="divide-y divide-gray-100 dark:divide-gray-700">
                     {accts.map(acct => (
                       <div key={acct.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
