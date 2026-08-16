@@ -347,24 +347,30 @@ export default function DebtPage() {
 
                   {expanded && (
                     <div className="px-4 py-3 space-y-3 border-t border-gray-100 dark:border-gray-700 mt-1">
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2 flex items-center gap-1">
-                          <DollarSign size={11} />Log Payment
+                      {debt.is_synced ? (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                          <DollarSign size={11} />Balance updates automatically from your bank — no need to log payments here.
                         </p>
-                        <div className="flex items-center gap-2">
-                          <input type="number" value={inp.amount} placeholder="Amount"
-                            onChange={e => setPaymentInputs(p => ({ ...p, [debt.id]: { ...inp, amount: e.target.value } }))}
-                            className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 w-28 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                          <input value={inp.note} placeholder="Note (optional)"
-                            onChange={e => setPaymentInputs(p => ({ ...p, [debt.id]: { ...inp, note: e.target.value } }))}
-                            className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 flex-1 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                          <button onClick={() => logPayment(debt.id)} disabled={payingId === debt.id || !inp.amount}
-                            className="text-xs px-3 py-1.5 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-2xl transition-colors disabled:opacity-50 flex items-center gap-1 font-semibold">
-                            {payingId === debt.id ? <Loader2 size={10} className="animate-spin" /> : null}
-                            Log
-                          </button>
+                      ) : (
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2 flex items-center gap-1">
+                            <DollarSign size={11} />Log Payment
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input type="number" value={inp.amount} placeholder="Amount"
+                              onChange={e => setPaymentInputs(p => ({ ...p, [debt.id]: { ...inp, amount: e.target.value } }))}
+                              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 w-28 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input value={inp.note} placeholder="Note (optional)"
+                              onChange={e => setPaymentInputs(p => ({ ...p, [debt.id]: { ...inp, note: e.target.value } }))}
+                              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 flex-1 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <button onClick={() => logPayment(debt.id)} disabled={payingId === debt.id || !inp.amount}
+                              className="text-xs px-3 py-1.5 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-2xl transition-colors disabled:opacity-50 flex items-center gap-1 font-semibold">
+                              {payingId === debt.id ? <Loader2 size={10} className="animate-spin" /> : null}
+                              Log
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       <div>
                         <button onClick={() => setDetailsModalDebt(debt)}
