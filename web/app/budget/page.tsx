@@ -725,6 +725,12 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
             <option value="fixed">fixed</option>
             <option value="variable">variable</option>
           </select>
+          {cat.is_debt_synced && (
+            <span title="Synced from a debt's minimum payment — this category's budgeted amount won't be overwritten automatically"
+              className="shrink-0 text-[9px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
+              Debt synced
+            </span>
+          )}
           <div className="relative">
             <button
               onClick={() => { setThresholdInput(String(alert?.threshold_pct ?? 80)); setShowAlertPopover(v => !v) }}

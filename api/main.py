@@ -37,6 +37,7 @@ from backend.db.models import Base
 _SCHEMA_PATCHES = [
     "ALTER TABLE plaid_items ADD COLUMN IF NOT EXISTS last_sync_error VARCHAR(500)",
     "ALTER TABLE budget_categories ADD COLUMN IF NOT EXISTS cost_type VARCHAR(10) NOT NULL DEFAULT 'variable'",
+    "ALTER TABLE budget_categories ADD COLUMN IF NOT EXISTS debt_account_id UUID REFERENCES debt_accounts(id) ON DELETE SET NULL",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS is_manual BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2)",

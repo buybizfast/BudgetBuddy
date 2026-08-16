@@ -110,6 +110,9 @@ class BudgetCategory(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     plaid_categories = Column(JSONB, nullable=False, default=list)
     cost_type = Column(String(10), nullable=False, default="variable")  # fixed / variable
+    # Set when this category was auto-created to track a debt's minimum
+    # payment, so it doesn't get duplicated on every sync.
+    debt_account_id = Column(UUID(as_uuid=False), ForeignKey("debt_accounts.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     __table_args__ = (

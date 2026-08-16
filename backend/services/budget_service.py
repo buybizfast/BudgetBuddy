@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.db.models import BudgetCategory, BudgetGroup, BudgetMonth, Transaction
+from backend.db.models import BudgetCategory, BudgetGroup, BudgetMonth, DebtAccount, Transaction
 
 _DEFAULT_GROUPS = [
     ("Income", ["Paycheck", "Other Income"]),
@@ -26,6 +26,39 @@ _DEFAULT_GROUPS = [
 ]
 
 
+async def _sync_debt_categories(bm: BudgetMonth, db: AsyncSession) -> bool:
+    """Ensure this budget month has a category linked to each active (not
+    dismissed, not paid off) debt, so debt payments show up in the budget
+    without manual entry. Only creates missing links — an existing linked
+    category's budgeted amount is left alone once set, so editing it (e.g.
+    to plan an extra payment above the minimum) sticks instead of getting
+    silently reset back to the minimum payment on every reload."""
+    debt_group = next((g for g in bm.groups if g.name == "Debt"), None)
+    if debt_group is None:
+        max_sort = max((g.sort_order for g in bm.groups), default=-1)
+        debt_group = BudgetGroup(budget_month_id=bm.id, name="Debt", sort_order=max_sort + 1)
+        db.add(debt_group)
+        await db.flush()
+
+    result = await db.execute(
+        select(DebtAccount).where(DebtAccount.dismissed == False, DebtAccount.is_paid_off == False)  # noqa: E712
+    )
+    active_debts = result.scalars().all()
+    linked_debt_ids = {c.debt_account_id for c in debt_group.categories if c.debt_account_id}
+    changed = False
+    next_sort = max((c.sort_order for c in debt_group.categories), default=-1) + 1
+    for debt in active_debts:
+        if str(debt.id) in linked_debt_ids:
+            continue
+        db.add(BudgetCategory(
+            group_id=debt_group.id, name=debt.name, budgeted=debt.minimum_payment or Decimal("0"),
+            sort_order=next_sort, cost_type="fixed", debt_account_id=debt.id,
+        ))
+        next_sort += 1
+        changed = True
+    return changed
+
+
 async def get_or_create_budget_month(year: int, month: int, db: AsyncSession) -> BudgetMonth:
     result = await db.execute(
         select(BudgetMonth).where(BudgetMonth.year == year, BudgetMonth.month == month)
@@ -33,6 +66,7 @@ async def get_or_create_budget_month(year: int, month: int, db: AsyncSession) ->
     )
     bm = result.scalar_one_or_none()
     if bm:
+        changed = False
         # Backfill the Income group for months created before it existed.
         if not any(g.name == "Income" for g in bm.groups):
             income_group = BudgetGroup(budget_month_id=bm.id, name="Income", sort_order=-1)
@@ -40,6 +74,10 @@ async def get_or_create_budget_month(year: int, month: int, db: AsyncSession) ->
             await db.flush()
             for cat_idx, cat_name in enumerate(["Paycheck", "Other Income"]):
                 db.add(BudgetCategory(group_id=income_group.id, name=cat_name, budgeted=Decimal("0"), sort_order=cat_idx))
+            changed = True
+        if await _sync_debt_categories(bm, db):
+            changed = True
+        if changed:
             await db.commit()
             result = await db.execute(
                 select(BudgetMonth).where(BudgetMonth.id == bm.id)
@@ -58,7 +96,18 @@ async def get_or_create_budget_month(year: int, month: int, db: AsyncSession) ->
             cat = BudgetCategory(group_id=group.id, name=cat_name, budgeted=Decimal("0"), sort_order=cat_idx)
             db.add(cat)
     await db.commit()
-    await db.refresh(bm)
+    result = await db.execute(
+        select(BudgetMonth).where(BudgetMonth.id == bm.id)
+        .options(selectinload(BudgetMonth.groups).selectinload(BudgetGroup.categories))
+    )
+    bm = result.scalar_one()
+    if await _sync_debt_categories(bm, db):
+        await db.commit()
+        result = await db.execute(
+            select(BudgetMonth).where(BudgetMonth.id == bm.id)
+            .options(selectinload(BudgetMonth.groups).selectinload(BudgetGroup.categories))
+        )
+        bm = result.scalar_one()
     return bm
 
 
@@ -97,7 +146,7 @@ async def get_budget_month_with_spending(year: int, month: int, db: AsyncSession
             remaining = cat.budgeted - spent
             cats_data.append({"id": str(cat.id), "name": cat.name, "budgeted": float(cat.budgeted),
                                "spent": float(spent), "remaining": float(remaining), "sort_order": cat.sort_order,
-                               "cost_type": cat.cost_type})
+                               "cost_type": cat.cost_type, "is_debt_synced": cat.debt_account_id is not None})
             group_budgeted += cat.budgeted
             group_spent += spent
             # The Income group tracks incoming money, not planned spending —

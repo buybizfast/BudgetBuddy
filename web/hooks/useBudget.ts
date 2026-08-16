@@ -17,7 +17,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface BudgetCategory {
   id: string; name: string; budgeted: number; spent: number; remaining: number; sort_order: number
-  cost_type: 'fixed' | 'variable'
+  cost_type: 'fixed' | 'variable'; is_debt_synced: boolean
 }
 export interface BudgetGroup {
   id: string; name: string; budgeted: number; spent: number; remaining: number; sort_order: number; categories: BudgetCategory[]
