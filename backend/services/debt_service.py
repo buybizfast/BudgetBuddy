@@ -274,10 +274,12 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
     total_interest = 0.0
     month = 0
     max_months = 600
+    names = {d.id: d.name for d in ordered}
     # Monthly total-balance trajectory, for graphing — starts at month 0 (today).
-    schedule = [{"month": 0, "date": _month_offset_date(0), "total_balance": round(sum(balances.values()), 2)}]
+    schedule = [{"month": 0, "date": _month_offset_date(0), "total_balance": round(sum(balances.values()), 2), "payments": []}]
     while any(balances[d.id] > 0.01 for d in ordered) and month < max_months:
         month += 1
+        month_payments: dict[str, float] = {}
         freed = 0.0
         for d in ordered:
             if balances[d.id] <= 0: continue
@@ -289,6 +291,7 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
             if balances[d.id] <= 0: continue
             pay = min(mins[d.id], balances[d.id])
             balances[d.id] -= pay
+            month_payments[d.id] = month_payments.get(d.id, 0) + pay
             if balances[d.id] <= 0:
                 freed += mins[d.id] - pay
                 payoff_month[d.id] = month
@@ -301,9 +304,15 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
             extra_apply = min(remaining_extra, balances[d.id])
             balances[d.id] -= extra_apply
             remaining_extra -= extra_apply
+            month_payments[d.id] = month_payments.get(d.id, 0) + extra_apply
             if balances[d.id] <= 0:
                 payoff_month[d.id] = month
-        schedule.append({"month": month, "date": _month_offset_date(month), "total_balance": round(max(sum(balances.values()), 0), 2)})
+        month_payment_list = [
+            {"id": did, "name": names[did], "payment": round(amt, 2), "balance": round(max(balances[did], 0), 2)}
+            for did, amt in month_payments.items() if amt > 0.005
+        ]
+        schedule.append({"month": month, "date": _month_offset_date(month),
+                          "total_balance": round(max(sum(balances.values()), 0), 2), "payments": month_payment_list})
     plan = [{"id": str(d.id), "name": d.name, "balance": float(d.balance), "minimum_payment": float(d.minimum_payment),
               "interest_rate": float(d.interest_rate),
               "payoff_month": payoff_month.get(d.id, max_months),

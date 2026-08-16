@@ -42,7 +42,9 @@ interface PlanDebt { id: string; name: string; balance: number; minimum_payment:
 
 interface PayoffPlan { debts: PlanDebt[]; total_months: number; total_interest: number; strategy: string; total_budgeted_extra: number }
 
-interface SchedulePoint { month: number; date: string; total_balance: number }
+interface SchedulePayment { id: string; name: string; payment: number; balance: number }
+
+interface SchedulePoint { month: number; date: string; total_balance: number; payments: SchedulePayment[] }
 
 interface StrategyPlan { debts: Required<PlanDebt>[]; total_months: number; total_interest: number; strategy: string; total_budgeted_extra: number; schedule: SchedulePoint[] }
 
@@ -796,29 +798,32 @@ function PayoffForecast() {
             </div>
           )}
 
+          <div className="flex items-center justify-end mt-2 mb-1">
+            <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+              <button onClick={() => setScheduleStrategy('snowball')}
+                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'snowball' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                Snowball
+              </button>
+              <button onClick={() => setScheduleStrategy('avalanche')}
+                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'avalanche' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                Avalanche
+              </button>
+            </div>
+          </div>
+
+          <PaymentSchedule plan={scheduleStrategy === 'snowball' ? compare.snowball : compare.avalanche} />
+
           <div className="flex items-center justify-between mt-4 mb-2 flex-wrap gap-2">
             <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Payoff Schedule</p>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
-                <button onClick={() => setScheduleView('list')}
-                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium flex items-center gap-1', scheduleView === 'list' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-                  List
-                </button>
-                <button onClick={() => setScheduleView('calendar')}
-                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium flex items-center gap-1', scheduleView === 'calendar' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-                  <CalendarClock size={11} />Calendar
-                </button>
-              </div>
-              <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
-                <button onClick={() => setScheduleStrategy('snowball')}
-                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'snowball' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-                  Snowball
-                </button>
-                <button onClick={() => setScheduleStrategy('avalanche')}
-                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'avalanche' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-                  Avalanche
-                </button>
-              </div>
+            <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+              <button onClick={() => setScheduleView('list')}
+                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium flex items-center gap-1', scheduleView === 'list' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                List
+              </button>
+              <button onClick={() => setScheduleView('calendar')}
+                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium flex items-center gap-1', scheduleView === 'calendar' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                <CalendarClock size={11} />Calendar
+              </button>
             </div>
           </div>
 
@@ -890,6 +895,56 @@ function PayoffCalendar({ plan }: { plan: StrategyPlan }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+const PAYMENT_SCHEDULE_VISIBLE_MONTHS = 12
+
+function PaymentSchedule({ plan }: { plan: StrategyPlan }) {
+  const [expanded, setExpanded] = useState(false)
+  const months = plan.schedule.filter(m => m.month > 0 && m.payments.length > 0)
+  const visible = expanded ? months : months.slice(0, PAYMENT_SCHEDULE_VISIBLE_MONTHS)
+
+  if (months.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Payment Schedule</p>
+      <div className="border border-gray-100 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
+          {visible.map(m => {
+            const monthTotal = m.payments.reduce((s, p) => s + p.payment, 0)
+            return (
+              <div key={m.month} className="px-3 py-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fmtMonthYear(m.date)}</span>
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{fmt(monthTotal)} total</span>
+                </div>
+                <div className="space-y-0.5">
+                  {m.payments.map(p => (
+                    <div key={p.id} className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-500 dark:text-gray-400 truncate">{p.name}</span>
+                      <span className="flex items-center gap-2 shrink-0 ml-2">
+                        <span className="text-gray-700 dark:text-gray-300 font-medium">{fmt(p.payment)}</span>
+                        <span className="text-gray-400 dark:text-gray-500 w-16 text-right">{fmt(p.balance)} left</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {months.length > PAYMENT_SCHEDULE_VISIBLE_MONTHS && (
+        <button onClick={() => setExpanded(v => !v)}
+          className="text-xs text-blue-600 hover:text-blue-700 mt-2 font-medium">
+          {expanded ? 'Show fewer months' : `Show all ${months.length} months`}
+        </button>
+      )}
     </div>
   )
 }
