@@ -101,7 +101,7 @@ export default function DebtPage() {
   }
 
   const saveDetails = async (debtId: string, details: {
-    account_type: string; minimum_payment: string; interest_rate: string; original_balance: string
+    account_type: string; minimum_payment: string; interest_rate: string; original_balance: string; credit_limit: string
   }) => {
     setSavingDetailsId(debtId)
     try {
@@ -113,6 +113,7 @@ export default function DebtPage() {
           minimum_payment: details.minimum_payment !== '' ? parseFloat(details.minimum_payment) : null,
           interest_rate: details.interest_rate !== '' ? parseFloat(details.interest_rate) : null,
           original_balance: details.original_balance !== '' ? parseFloat(details.original_balance) : null,
+          credit_limit: details.credit_limit !== '' ? parseFloat(details.credit_limit) : null,
         })
       })
       await fetchDebts()
@@ -539,13 +540,14 @@ export default function DebtPage() {
 function DebtDetailsModal({ debt, saving, onSave, onClose }: {
   debt: Debt
   saving: boolean
-  onSave: (details: { account_type: string; minimum_payment: string; interest_rate: string; original_balance: string }) => void
+  onSave: (details: { account_type: string; minimum_payment: string; interest_rate: string; original_balance: string; credit_limit: string }) => void
   onClose: () => void
 }) {
   const [accountType, setAccountType] = useState(debt.account_type)
   const [minimumPayment, setMinimumPayment] = useState(String(debt.minimum_payment))
   const [interestRate, setInterestRate] = useState(String(debt.interest_rate))
   const [originalBalance, setOriginalBalance] = useState(String(debt.original_balance))
+  const [creditLimit, setCreditLimit] = useState(debt.credit_limit !== null ? String(debt.credit_limit) : '')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
@@ -590,9 +592,19 @@ function DebtDetailsModal({ debt, saving, onSave, onClose }: {
           <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Used to calculate % paid off — defaults to current balance + payments logged if left blank.</p>
         </div>
 
+        {accountType === 'credit_card' && (
+          <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Credit Limit</label>
+            <input type="number" value={creditLimit} onChange={e => setCreditLimit(e.target.value)}
+              placeholder="0.00"
+              className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Used for utilization — set this if your bank doesn't report a limit to Plaid. Synced limits take priority when available.</p>
+          </div>
+        )}
+
         <div className="flex gap-2 pt-1">
           <button
-            onClick={() => onSave({ account_type: accountType, minimum_payment: minimumPayment, interest_rate: interestRate, original_balance: originalBalance })}
+            onClick={() => onSave({ account_type: accountType, minimum_payment: minimumPayment, interest_rate: interestRate, original_balance: originalBalance, credit_limit: creditLimit })}
             disabled={saving}
             className="flex-1 text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] disabled:opacity-50 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
             {saving && <Loader2 size={14} className="animate-spin" />}

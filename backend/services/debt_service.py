@@ -59,7 +59,13 @@ async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
         )
         credit_limits = {str(bid): float(limit) for bid, limit in result.all() if limit is not None}
 
-    return [_serialize(d, credit_limits.get(str(d.bank_account_id))) for d in debts]
+    def _effective_limit(d: DebtAccount) -> Optional[float]:
+        synced = credit_limits.get(str(d.bank_account_id)) if d.bank_account_id else None
+        if synced is not None:
+            return synced
+        return float(d.credit_limit) if d.credit_limit is not None else None
+
+    return [_serialize(d, _effective_limit(d)) for d in debts]
 
 
 # Maps Plaid's account subtype (within type "credit"/"loan") to this app's
@@ -144,6 +150,7 @@ async def create_debt(
     name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession,
     account_type: str = "loan", due_date_day: Optional[int] = None, statement_date_day: Optional[int] = None,
     total_installments: Optional[int] = None, original_balance: Optional[float] = None,
+    credit_limit: Optional[float] = None,
 ) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
     last = result.scalar_one_or_none()
@@ -152,7 +159,8 @@ async def create_debt(
                        interest_rate=Decimal(str(interest_rate)), sort_order=sort_order,
                        account_type=account_type, due_date_day=due_date_day, statement_date_day=statement_date_day,
                        total_installments=total_installments,
-                       original_balance=Decimal(str(original_balance)) if original_balance is not None else None)
+                       original_balance=Decimal(str(original_balance)) if original_balance is not None else None,
+                       credit_limit=Decimal(str(credit_limit)) if credit_limit is not None else None)
     db.add(debt)
     await db.commit()
     await db.refresh(debt)
@@ -162,7 +170,7 @@ async def create_debt(
 async def update_debt(
     debt_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession,
     account_type=None, due_date_day=None, statement_date_day=None,
-    total_installments=None, installments_paid=None, original_balance=None,
+    total_installments=None, installments_paid=None, original_balance=None, credit_limit=None,
 ) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
     debt = result.scalar_one()
@@ -176,6 +184,7 @@ async def update_debt(
     if total_installments is not None: debt.total_installments = total_installments
     if installments_paid is not None: debt.installments_paid = installments_paid
     if original_balance is not None: debt.original_balance = Decimal(str(original_balance))
+    if credit_limit is not None: debt.credit_limit = Decimal(str(credit_limit))
     await db.commit()
     await db.refresh(debt)
     return _serialize(debt)

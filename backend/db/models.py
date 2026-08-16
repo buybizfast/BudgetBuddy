@@ -132,6 +132,10 @@ class DebtAccount(Base):
     minimum_payment = Column(Numeric(12, 2), nullable=False, default=0)
     interest_rate = Column(Numeric(6, 4), nullable=False, default=0)
     account_type = Column(String(30), nullable=False, default="loan")  # credit_card / loan / student_loan / auto_loan / personal_loan / bnpl / other
+    # User-entered fallback for credit utilization when Plaid doesn't report a
+    # limit for this card (varies by issuer) — the synced BankAccount's
+    # credit_limit takes priority over this when both are present.
+    credit_limit = Column(Numeric(12, 2), nullable=True)
     due_date_day = Column(Integer, nullable=True)  # day of month payment is due (1-31)
     statement_date_day = Column(Integer, nullable=True)  # credit cards only: statement/reporting day (1-31)
     # Installment tracking — mainly for BNPL plans (Affirm/Klarna/Afterpay-style),

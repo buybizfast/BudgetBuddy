@@ -27,6 +27,7 @@ class CreateDebtRequest(BaseModel):
     name: str; balance: float; minimum_payment: float = 0.0; interest_rate: float = 0.0
     account_type: str = "loan"; due_date_day: Optional[int] = None; statement_date_day: Optional[int] = None
     total_installments: Optional[int] = None; original_balance: Optional[float] = None
+    credit_limit: Optional[float] = None
 
 @router.post("/")
 async def create_debt(body: CreateDebtRequest, db: AsyncSession = Depends(get_session)):
@@ -34,6 +35,7 @@ async def create_debt(body: CreateDebtRequest, db: AsyncSession = Depends(get_se
         body.name, body.balance, body.minimum_payment, body.interest_rate, db,
         account_type=body.account_type, due_date_day=body.due_date_day, statement_date_day=body.statement_date_day,
         total_installments=body.total_installments, original_balance=body.original_balance,
+        credit_limit=body.credit_limit,
     )
 
 class UpdateDebtRequest(BaseModel):
@@ -41,7 +43,7 @@ class UpdateDebtRequest(BaseModel):
     minimum_payment: Optional[float] = None; interest_rate: Optional[float] = None
     account_type: Optional[str] = None; due_date_day: Optional[int] = None; statement_date_day: Optional[int] = None
     total_installments: Optional[int] = None; installments_paid: Optional[int] = None
-    original_balance: Optional[float] = None
+    original_balance: Optional[float] = None; credit_limit: Optional[float] = None
 
 @router.patch("/{debt_id}")
 async def update_debt(debt_id: str, body: UpdateDebtRequest, db: AsyncSession = Depends(get_session)):
@@ -50,7 +52,7 @@ async def update_debt(debt_id: str, body: UpdateDebtRequest, db: AsyncSession = 
             debt_id, body.name, body.balance, body.minimum_payment, body.interest_rate, db,
             account_type=body.account_type, due_date_day=body.due_date_day, statement_date_day=body.statement_date_day,
             total_installments=body.total_installments, installments_paid=body.installments_paid,
-            original_balance=body.original_balance,
+            original_balance=body.original_balance, credit_limit=body.credit_limit,
         )
     except Exception:
         raise HTTPException(status_code=404, detail="Debt not found")
