@@ -1,13 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { CreditCard, Plus, Trash2, ChevronDown, ChevronUp, Loader2, Calculator, DollarSign, CalendarClock, TrendingDown } from 'lucide-react'
+import { CreditCard, Plus, Trash2, ChevronDown, ChevronUp, Loader2, Calculator, DollarSign, CalendarClock, TrendingDown, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
 import { apiFetch, BASE } from '@/lib/api'
 
 interface Debt {
-  id: string; name: string; balance: number; total_paid: number
+  id: string; name: string; balance: number; original_balance: number; total_paid: number
   interest_rate: number; minimum_payment: number; payments: Payment[]
   account_type: string; due_date_day: number | null; statement_date_day: number | null
   expected_payoff_months: number | null; expected_payoff_date: string | null
@@ -56,7 +56,7 @@ export default function DebtPage() {
   const [expandedDebt, setExpandedDebt] = useState<string | null>(null)
   const [paymentInputs, setPaymentInputs] = useState<Record<string, { amount: string; note: string }>>({})
   const [payingId, setPayingId] = useState<string | null>(null)
-  const [detailsInputs, setDetailsInputs] = useState<Record<string, { minimum_payment: string; interest_rate: string }>>({})
+  const [detailsModalDebt, setDetailsModalDebt] = useState<Debt | null>(null)
   const [savingDetailsId, setSavingDetailsId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -100,20 +100,23 @@ export default function DebtPage() {
     } catch {} finally { setPayingId(null) }
   }
 
-  const saveDetails = async (debtId: string) => {
-    const inp = detailsInputs[debtId]
-    if (!inp) return
+  const saveDetails = async (debtId: string, details: {
+    account_type: string; minimum_payment: string; interest_rate: string; original_balance: string
+  }) => {
     setSavingDetailsId(debtId)
     try {
       await apiFetch(`/api/v1/debt/${debtId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          minimum_payment: inp.minimum_payment !== '' ? parseFloat(inp.minimum_payment) : null,
-          interest_rate: inp.interest_rate !== '' ? parseFloat(inp.interest_rate) : null,
+          account_type: details.account_type,
+          minimum_payment: details.minimum_payment !== '' ? parseFloat(details.minimum_payment) : null,
+          interest_rate: details.interest_rate !== '' ? parseFloat(details.interest_rate) : null,
+          original_balance: details.original_balance !== '' ? parseFloat(details.original_balance) : null,
         })
       })
       await fetchDebts()
+      setDetailsModalDebt(null)
     } catch {} finally { setSavingDetailsId(null) }
   }
 
@@ -276,12 +279,11 @@ export default function DebtPage() {
             </div>
           ) : (
             debts.map(debt => {
-              const originalBalance = debt.balance + debt.total_paid
+              const originalBalance = debt.original_balance
               const paid = debt.total_paid
               const pct = originalBalance > 0 ? Math.min(100, (paid / originalBalance) * 100) : 0
               const expanded = expandedDebt === debt.id
               const inp = paymentInputs[debt.id] || { amount: '', note: '' }
-              const detailsInp = detailsInputs[debt.id] || { minimum_payment: String(debt.minimum_payment), interest_rate: String(debt.interest_rate) }
               const needsDetails = debt.is_synced && (debt.minimum_payment <= 0 || debt.interest_rate <= 0)
 
               return (
@@ -365,33 +367,15 @@ export default function DebtPage() {
                       </div>
 
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2 flex items-center gap-1">
-                          <Calculator size={11} />Minimum Payment &amp; Interest Rate
+                        <button onClick={() => setDetailsModalDebt(debt)}
+                          className="text-xs px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 hover:border-blue-400 hover:text-blue-600 text-gray-700 dark:text-gray-300 rounded-2xl transition-colors flex items-center gap-1.5 font-semibold">
+                          <Calculator size={11} />Debt Details
                           {needsDetails && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 ml-1">
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">
                               needed for payoff estimate
                             </span>
                           )}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-0.5">
-                            <span className="text-gray-400 dark:text-gray-500 text-xs">$</span>
-                            <input type="number" value={detailsInp.minimum_payment} placeholder="Min. payment"
-                              onChange={e => setDetailsInputs(p => ({ ...p, [debt.id]: { ...detailsInp, minimum_payment: e.target.value } }))}
-                              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 w-24 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            <input type="number" value={detailsInp.interest_rate} placeholder="APR"
-                              onChange={e => setDetailsInputs(p => ({ ...p, [debt.id]: { ...detailsInp, interest_rate: e.target.value } }))}
-                              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 w-20 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            <span className="text-gray-400 dark:text-gray-500 text-xs">%</span>
-                          </div>
-                          <button onClick={() => saveDetails(debt.id)} disabled={savingDetailsId === debt.id}
-                            className="text-xs px-3 py-1.5 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-2xl transition-colors disabled:opacity-50 flex items-center gap-1 font-semibold">
-                            {savingDetailsId === debt.id ? <Loader2 size={10} className="animate-spin" /> : null}
-                            Save
-                          </button>
-                        </div>
+                        </button>
                       </div>
 
                       {debt.payments.length > 0 && (
@@ -498,6 +482,87 @@ export default function DebtPage() {
           </div>
         </div>
       </div>
+      </div>
+
+      {detailsModalDebt && (
+        <DebtDetailsModal
+          debt={detailsModalDebt}
+          saving={savingDetailsId === detailsModalDebt.id}
+          onSave={details => saveDetails(detailsModalDebt.id, details)}
+          onClose={() => setDetailsModalDebt(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function DebtDetailsModal({ debt, saving, onSave, onClose }: {
+  debt: Debt
+  saving: boolean
+  onSave: (details: { account_type: string; minimum_payment: string; interest_rate: string; original_balance: string }) => void
+  onClose: () => void
+}) {
+  const [accountType, setAccountType] = useState(debt.account_type)
+  const [minimumPayment, setMinimumPayment] = useState(String(debt.minimum_payment))
+  const [interestRate, setInterestRate] = useState(String(debt.interest_rate))
+  const [originalBalance, setOriginalBalance] = useState(String(debt.original_balance))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Debt Details</h3>
+          <button onClick={onClose} aria-label="Close" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500 -mt-2">{debt.name}</p>
+
+        <div>
+          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Debt Type</label>
+          <select value={accountType} onChange={e => setAccountType(e.target.value)}
+            className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            {ACCOUNT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Minimum Payment</label>
+            <input type="number" value={minimumPayment} onChange={e => setMinimumPayment(e.target.value)}
+              placeholder="0.00"
+              className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Interest Rate (%)</label>
+            <input type="number" value={interestRate} onChange={e => setInterestRate(e.target.value)}
+              placeholder="0.00"
+              className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Original Balance</label>
+          <input type="number" value={originalBalance} onChange={e => setOriginalBalance(e.target.value)}
+            placeholder="0.00"
+            className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Used to calculate % paid off — defaults to current balance + payments logged if left blank.</p>
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={() => onSave({ account_type: accountType, minimum_payment: minimumPayment, interest_rate: interestRate, original_balance: originalBalance })}
+            disabled={saving}
+            className="flex-1 text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] disabled:opacity-50 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            Save
+          </button>
+          <button onClick={onClose}
+            className="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors">
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   )

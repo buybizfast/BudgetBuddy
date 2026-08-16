@@ -130,7 +130,7 @@ async def apply_liability_snapshot(
 async def create_debt(
     name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession,
     account_type: str = "loan", due_date_day: Optional[int] = None, statement_date_day: Optional[int] = None,
-    total_installments: Optional[int] = None,
+    total_installments: Optional[int] = None, original_balance: Optional[float] = None,
 ) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
     last = result.scalar_one_or_none()
@@ -138,7 +138,8 @@ async def create_debt(
     debt = DebtAccount(name=name, balance=Decimal(str(balance)), minimum_payment=Decimal(str(minimum_payment)),
                        interest_rate=Decimal(str(interest_rate)), sort_order=sort_order,
                        account_type=account_type, due_date_day=due_date_day, statement_date_day=statement_date_day,
-                       total_installments=total_installments)
+                       total_installments=total_installments,
+                       original_balance=Decimal(str(original_balance)) if original_balance is not None else None)
     db.add(debt)
     await db.commit()
     await db.refresh(debt)
@@ -148,7 +149,7 @@ async def create_debt(
 async def update_debt(
     debt_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession,
     account_type=None, due_date_day=None, statement_date_day=None,
-    total_installments=None, installments_paid=None,
+    total_installments=None, installments_paid=None, original_balance=None,
 ) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
     debt = result.scalar_one()
@@ -161,6 +162,7 @@ async def update_debt(
     if statement_date_day is not None: debt.statement_date_day = statement_date_day
     if total_installments is not None: debt.total_installments = total_installments
     if installments_paid is not None: debt.installments_paid = installments_paid
+    if original_balance is not None: debt.original_balance = Decimal(str(original_balance))
     await db.commit()
     await db.refresh(debt)
     return _serialize(debt)
@@ -242,7 +244,9 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
 def _serialize(debt: DebtAccount) -> dict[str, Any]:
     total_paid = sum(float(p.amount) for p in debt.payments) if debt.payments else 0
     payoff = _estimate_payoff(float(debt.balance), float(debt.interest_rate), float(debt.minimum_payment))
+    original_balance = float(debt.original_balance) if debt.original_balance is not None else float(debt.balance) + total_paid
     return {"id": str(debt.id), "name": debt.name, "balance": float(debt.balance),
+            "original_balance": original_balance,
             "minimum_payment": float(debt.minimum_payment), "interest_rate": float(debt.interest_rate),
             "account_type": debt.account_type, "due_date_day": debt.due_date_day, "statement_date_day": debt.statement_date_day,
             "sort_order": debt.sort_order, "is_paid_off": debt.is_paid_off, "total_paid": total_paid,

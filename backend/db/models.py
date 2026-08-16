@@ -127,6 +127,7 @@ class DebtAccount(Base):
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     name = Column(String(150), nullable=False)
     balance = Column(Numeric(12, 2), nullable=False)
+    original_balance = Column(Numeric(12, 2), nullable=True)  # user-entered; falls back to balance + payments if unset
     minimum_payment = Column(Numeric(12, 2), nullable=False, default=0)
     interest_rate = Column(Numeric(6, 4), nullable=False, default=0)
     account_type = Column(String(30), nullable=False, default="loan")  # credit_card / loan / student_loan / auto_loan / personal_loan / bnpl / other

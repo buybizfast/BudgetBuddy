@@ -47,6 +47,7 @@ _SCHEMA_PATCHES = [
     # newest ones — some deployed databases have a stale copy of this table
     # predating fields like account_type that have existed in the model for a
     # while, and create_all() never retrofits an existing table.
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS original_balance NUMERIC(12, 2)",
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS minimum_payment NUMERIC(12, 2) NOT NULL DEFAULT 0",
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS interest_rate NUMERIC(6, 4) NOT NULL DEFAULT 0",
     "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(30) NOT NULL DEFAULT 'loan'",
