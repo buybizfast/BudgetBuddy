@@ -56,6 +56,8 @@ export default function DebtPage() {
   const [expandedDebt, setExpandedDebt] = useState<string | null>(null)
   const [paymentInputs, setPaymentInputs] = useState<Record<string, { amount: string; note: string }>>({})
   const [payingId, setPayingId] = useState<string | null>(null)
+  const [detailsInputs, setDetailsInputs] = useState<Record<string, { minimum_payment: string; interest_rate: string }>>({})
+  const [savingDetailsId, setSavingDetailsId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -96,6 +98,23 @@ export default function DebtPage() {
       await fetchDebts()
       setPaymentInputs(p => ({ ...p, [debtId]: { amount: '', note: '' } }))
     } catch {} finally { setPayingId(null) }
+  }
+
+  const saveDetails = async (debtId: string) => {
+    const inp = detailsInputs[debtId]
+    if (!inp) return
+    setSavingDetailsId(debtId)
+    try {
+      await apiFetch(`/api/v1/debt/${debtId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          minimum_payment: inp.minimum_payment !== '' ? parseFloat(inp.minimum_payment) : null,
+          interest_rate: inp.interest_rate !== '' ? parseFloat(inp.interest_rate) : null,
+        })
+      })
+      await fetchDebts()
+    } catch {} finally { setSavingDetailsId(null) }
   }
 
   const deleteDebt = async (id: string) => {
@@ -262,6 +281,8 @@ export default function DebtPage() {
               const pct = originalBalance > 0 ? Math.min(100, (paid / originalBalance) * 100) : 0
               const expanded = expandedDebt === debt.id
               const inp = paymentInputs[debt.id] || { amount: '', note: '' }
+              const detailsInp = detailsInputs[debt.id] || { minimum_payment: String(debt.minimum_payment), interest_rate: String(debt.interest_rate) }
+              const needsDetails = debt.is_synced && (debt.minimum_payment <= 0 || debt.interest_rate <= 0)
 
               return (
                 <div key={debt.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
@@ -339,6 +360,36 @@ export default function DebtPage() {
                             className="text-xs px-3 py-1.5 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-2xl transition-colors disabled:opacity-50 flex items-center gap-1 font-semibold">
                             {payingId === debt.id ? <Loader2 size={10} className="animate-spin" /> : null}
                             Log
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2 flex items-center gap-1">
+                          <Calculator size={11} />Minimum Payment &amp; Interest Rate
+                          {needsDetails && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 ml-1">
+                              needed for payoff estimate
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-0.5">
+                            <span className="text-gray-400 dark:text-gray-500 text-xs">$</span>
+                            <input type="number" value={detailsInp.minimum_payment} placeholder="Min. payment"
+                              onChange={e => setDetailsInputs(p => ({ ...p, [debt.id]: { ...detailsInp, minimum_payment: e.target.value } }))}
+                              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 w-24 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <input type="number" value={detailsInp.interest_rate} placeholder="APR"
+                              onChange={e => setDetailsInputs(p => ({ ...p, [debt.id]: { ...detailsInp, interest_rate: e.target.value } }))}
+                              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-xs rounded-xl px-2 py-1.5 w-20 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <span className="text-gray-400 dark:text-gray-500 text-xs">%</span>
+                          </div>
+                          <button onClick={() => saveDetails(debt.id)} disabled={savingDetailsId === debt.id}
+                            className="text-xs px-3 py-1.5 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-2xl transition-colors disabled:opacity-50 flex items-center gap-1 font-semibold">
+                            {savingDetailsId === debt.id ? <Loader2 size={10} className="animate-spin" /> : null}
+                            Save
                           </button>
                         </div>
                       </div>
