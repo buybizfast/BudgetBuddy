@@ -673,6 +673,7 @@ function PayoffForecast() {
   const [loadingCompare, setLoadingCompare] = useState(true)
   const [hoverMonth, setHoverMonth] = useState<number | null>(null)
   const [scheduleStrategy, setScheduleStrategy] = useState<'snowball' | 'avalanche'>('snowball')
+  const [scheduleView, setScheduleView] = useState<'list' | 'calendar'>('list')
 
   useEffect(() => {
     const extraNum = parseFloat(extra) || 0
@@ -795,44 +796,100 @@ function PayoffForecast() {
             </div>
           )}
 
-          <div className="flex items-center justify-between mt-4 mb-2">
+          <div className="flex items-center justify-between mt-4 mb-2 flex-wrap gap-2">
             <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Payoff Schedule</p>
-            <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
-              <button onClick={() => setScheduleStrategy('snowball')}
-                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'snowball' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-                Snowball
-              </button>
-              <button onClick={() => setScheduleStrategy('avalanche')}
-                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'avalanche' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-                Avalanche
-              </button>
+            <div className="flex items-center gap-2">
+              <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+                <button onClick={() => setScheduleView('list')}
+                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium flex items-center gap-1', scheduleView === 'list' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                  List
+                </button>
+                <button onClick={() => setScheduleView('calendar')}
+                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium flex items-center gap-1', scheduleView === 'calendar' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                  <CalendarClock size={11} />Calendar
+                </button>
+              </div>
+              <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+                <button onClick={() => setScheduleStrategy('snowball')}
+                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'snowball' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                  Snowball
+                </button>
+                <button onClick={() => setScheduleStrategy('avalanche')}
+                  className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'avalanche' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                  Avalanche
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            {[...(scheduleStrategy === 'snowball' ? compare.snowball : compare.avalanche).debts]
-              .sort((a, b) => a.payoff_month - b.payoff_month)
-              .map((d, i) => (
-                <div key={d.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-4 h-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center justify-center text-[9px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{d.name}</span>
-                    {d.budgeted_extra > 0 && (
-                      <span className="text-[9px] font-medium px-1 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 shrink-0">
-                        +{fmt0(d.budgeted_extra)} budgeted
+          {scheduleView === 'list' ? (
+            <div className="space-y-1.5">
+              {[...(scheduleStrategy === 'snowball' ? compare.snowball : compare.avalanche).debts]
+                .sort((a, b) => a.payoff_month - b.payoff_month)
+                .map((d, i) => (
+                  <div key={d.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-4 h-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center justify-center text-[9px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
+                        {i + 1}
                       </span>
-                    )}
+                      <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{d.name}</span>
+                      {d.budgeted_extra > 0 && (
+                        <span className="text-[9px] font-medium px-1 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 shrink-0">
+                          +{fmt0(d.budgeted_extra)} budgeted
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-gray-500 dark:text-gray-400 shrink-0 ml-2">
+                      {d.payoff_date ? fmtMonthYear(d.payoff_date) : `${d.payoff_month} mo`}
+                    </span>
                   </div>
-                  <span className="text-gray-500 dark:text-gray-400 shrink-0 ml-2">
-                    {d.payoff_date ? fmtMonthYear(d.payoff_date) : `${d.payoff_month} mo`}
-                  </span>
-                </div>
-              ))}
-          </div>
+                ))}
+            </div>
+          ) : (
+            <PayoffCalendar plan={scheduleStrategy === 'snowball' ? compare.snowball : compare.avalanche} />
+          )}
         </>
       )}
+    </div>
+  )
+}
+
+function PayoffCalendar({ plan }: { plan: StrategyPlan }) {
+  const byMonth = new Map<number, Required<PlanDebt>[]>()
+  for (const d of plan.debts) {
+    if (!byMonth.has(d.payoff_month)) byMonth.set(d.payoff_month, [])
+    byMonth.get(d.payoff_month)!.push(d)
+  }
+  const milestoneMonths = [...byMonth.keys()].sort((a, b) => a - b)
+
+  if (milestoneMonths.length === 0) {
+    return <p className="text-xs text-gray-400 dark:text-gray-500">No debts to schedule.</p>
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {milestoneMonths.map(month => {
+        const debtsThisMonth = byMonth.get(month)!
+        const isLast = month === milestoneMonths[milestoneMonths.length - 1]
+        return (
+          <div key={month} className={cn(
+            'rounded-xl border p-2.5',
+            isLast ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900' : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-700'
+          )}>
+            <p className={cn('text-xs font-bold mb-1', isLast ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300')}>
+              {debtsThisMonth[0].payoff_date ? fmtMonthYear(debtsThisMonth[0].payoff_date) : `Month ${month}`}
+            </p>
+            <div className="space-y-0.5">
+              {debtsThisMonth.map(d => (
+                <p key={d.id} className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                  {isLast && '🎉 '}{d.name}
+                </p>
+              ))}
+            </div>
+            {isLast && <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-1 font-medium">Debt-free!</p>}
+          </div>
+        )
+      })}
     </div>
   )
 }
