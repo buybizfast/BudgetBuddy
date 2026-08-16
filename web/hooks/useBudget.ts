@@ -124,6 +124,24 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
+  const reorderGroups = async (budgetMonthId: string, groupIds: string[]) => {
+    setBudget(prev => {
+      if (!prev) return prev
+      const reordered = groupIds
+        .map(id => prev.groups.find(g => g.id === id))
+        .filter((g): g is BudgetGroup => !!g)
+      // Groups not in groupIds (e.g. Income, which the UI never shows as
+      // draggable) keep their existing relative position.
+      const untouched = prev.groups.filter(g => !groupIds.includes(g.id))
+      return { ...prev, groups: [...untouched.filter(g => g.name === 'Income'), ...reordered] }
+    })
+    await apiFetch(`/api/v1/budget/month/${budgetMonthId}/groups/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ group_ids: groupIds }),
+    })
+    await refresh()
+  }
+
   const addCategory = async (groupId: string, name: string) => {
     await apiFetch(`/api/v1/budget/groups/${groupId}/categories`, { method: 'POST', body: JSON.stringify({ name }) })
     await refresh()
@@ -144,5 +162,5 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
-  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, reorderCategories, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
+  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
 }

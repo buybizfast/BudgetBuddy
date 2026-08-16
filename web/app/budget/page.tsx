@@ -28,7 +28,9 @@ export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, reorderCategories, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null)
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null)
   const [editingIncome, setEditingIncome] = useState(false)
   const [incomeInput, setIncomeInput] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -148,6 +150,19 @@ export default function BudgetPage() {
   }
 
   const toggleGroup = (id: string) => setCollapsedGroups(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const handleGroupDrop = (targetId: string) => {
+    if (!draggedGroupId || draggedGroupId === targetId || !budget) { setDraggedGroupId(null); setDragOverGroupId(null); return }
+    const ids = budget.groups.filter(g => g.name !== 'Income').map(g => g.id)
+    const fromIdx = ids.indexOf(draggedGroupId)
+    const toIdx = ids.indexOf(targetId)
+    if (fromIdx === -1 || toIdx === -1) { setDraggedGroupId(null); setDragOverGroupId(null); return }
+    ids.splice(fromIdx, 1)
+    ids.splice(toIdx, 0, draggedGroupId)
+    reorderGroups(budget.id, ids)
+    setDraggedGroupId(null)
+    setDragOverGroupId(null)
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -333,6 +348,12 @@ export default function BudgetPage() {
                 onToggleCostType={updateCategoryCostType}
                 onDeleteCategory={deleteCategory}
                 onReorder={reorderCategories}
+                isDragging={draggedGroupId === group.id}
+                isDragOver={dragOverGroupId === group.id && draggedGroupId !== null && draggedGroupId !== group.id}
+                onGroupDragStart={() => setDraggedGroupId(group.id)}
+                onGroupDragEnter={() => setDragOverGroupId(group.id)}
+                onGroupDragEnd={() => { setDraggedGroupId(null); setDragOverGroupId(null) }}
+                onGroupDrop={() => handleGroupDrop(group.id)}
               />
             ))}
 
@@ -498,9 +519,11 @@ interface GroupCardProps {
   onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
   onDeleteCategory: (catId: string) => void
   onReorder: (groupId: string, categoryIds: string[]) => void
+  isDragging: boolean; isDragOver: boolean
+  onGroupDragStart: () => void; onGroupDragEnter: () => void; onGroupDragEnd: () => void; onGroupDrop: () => void
 }
 
-function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory, onReorder }: GroupCardProps) {
+function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory, onReorder, isDragging, isDragOver, onGroupDragStart, onGroupDragEnter, onGroupDragEnd, onGroupDrop }: GroupCardProps) {
   const over = group.spent > group.budgeted && group.budgeted > 0
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -519,7 +542,19 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+    <div
+      draggable
+      onDragStart={onGroupDragStart}
+      onDragEnter={onGroupDragEnter}
+      onDragOver={e => e.preventDefault()}
+      onDragEnd={onGroupDragEnd}
+      onDrop={e => { e.preventDefault(); onGroupDrop() }}
+      className={cn(
+        'bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden transition-opacity',
+        isDragging && 'opacity-40',
+        isDragOver && 'ring-2 ring-blue-500'
+      )}
+    >
       {/* Group header */}
       <div
         role="button"
@@ -531,6 +566,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
         onClick={onToggle}
       >
         <div className="flex items-center gap-2 min-w-0">
+          <GripVertical size={13} className="text-gray-300 dark:text-gray-600 shrink-0 cursor-grab active:cursor-grabbing" aria-hidden="true" />
           <ChevronDown size={14} aria-hidden="true" className={cn('text-gray-400 dark:text-gray-500 shrink-0 transition-transform', collapsed && '-rotate-90')} />
           <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{group.name}</span>
         </div>

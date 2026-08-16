@@ -33,6 +33,15 @@ async def update_income(budget_month_id: str, body: UpdateIncomeRequest, db: Asy
     return {"status": "ok"}
 
 
+class ReorderGroupsRequest(BaseModel):
+    group_ids: list[str]
+
+@router.patch("/month/{budget_month_id}/groups/reorder")
+async def reorder_groups(budget_month_id: str, body: ReorderGroupsRequest, db: AsyncSession = Depends(get_session)):
+    await budget_service.reorder_groups(budget_month_id, body.group_ids, db)
+    return {"status": "ok"}
+
+
 class UpdateCategoryRequest(BaseModel):
     budgeted: Optional[float] = None
     name: Optional[str] = None
