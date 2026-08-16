@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.db.models import BudgetCategory, BudgetGroup, BudgetMonth, DebtAccount, DebtPayment
+from backend.db.models import BankAccount, BudgetCategory, BudgetGroup, BudgetMonth, DebtAccount, DebtPayment
 
 log = logging.getLogger("services.debt")
 
@@ -46,7 +46,20 @@ async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
         .options(selectinload(DebtAccount.payments))
         .order_by(DebtAccount.balance, DebtAccount.created_at)
     )
-    return [_serialize(d) for d in result.scalars().all()]
+    debts = result.scalars().all()
+
+    # Credit limit lives on the linked BankAccount (from Plaid), not on
+    # DebtAccount itself — pull it in for utilization display on credit
+    # card debts that are synced.
+    bank_account_ids = [d.bank_account_id for d in debts if d.bank_account_id]
+    credit_limits: dict[str, float] = {}
+    if bank_account_ids:
+        result = await db.execute(
+            select(BankAccount.id, BankAccount.credit_limit).where(BankAccount.id.in_(bank_account_ids))
+        )
+        credit_limits = {str(bid): float(limit) for bid, limit in result.all() if limit is not None}
+
+    return [_serialize(d, credit_limits.get(str(d.bank_account_id))) for d in debts]
 
 
 # Maps Plaid's account subtype (within type "credit"/"loan") to this app's
@@ -278,7 +291,7 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
             "total_budgeted_extra": round(sum(budget_extras.values()), 2)}
 
 
-def _serialize(debt: DebtAccount) -> dict[str, Any]:
+def _serialize(debt: DebtAccount, credit_limit: Optional[float] = None) -> dict[str, Any]:
     total_paid = sum(float(p.amount) for p in debt.payments) if debt.payments else 0
     payoff = _estimate_payoff(float(debt.balance), float(debt.interest_rate), float(debt.minimum_payment))
     original_balance = float(debt.original_balance) if debt.original_balance is not None else float(debt.balance) + total_paid
@@ -288,6 +301,7 @@ def _serialize(debt: DebtAccount) -> dict[str, Any]:
             "account_type": debt.account_type, "due_date_day": debt.due_date_day, "statement_date_day": debt.statement_date_day,
             "sort_order": debt.sort_order, "is_paid_off": debt.is_paid_off, "total_paid": total_paid,
             "is_synced": debt.bank_account_id is not None,
+            "credit_limit": credit_limit,
             "total_installments": debt.total_installments, "installments_paid": debt.installments_paid,
             "expected_payoff_months": payoff["months"], "expected_payoff_date": payoff["date"],
             "payments": [{"id": str(p.id), "amount": float(p.amount), "paid_on": p.paid_on.isoformat(), "note": p.note} for p in (debt.payments or [])]}

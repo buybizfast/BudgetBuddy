@@ -11,7 +11,7 @@ interface Debt {
   interest_rate: number; minimum_payment: number; payments: Payment[]
   account_type: string; due_date_day: number | null; statement_date_day: number | null
   expected_payoff_months: number | null; expected_payoff_date: string | null
-  is_paid_off: boolean; is_synced: boolean
+  is_paid_off: boolean; is_synced: boolean; credit_limit: number | null
   total_installments: number | null; installments_paid: number
 }
 
@@ -156,6 +156,13 @@ export default function DebtPage() {
   const totalPaid = debts.reduce((s, d) => s + d.total_paid, 0)
   const totalOriginal = totalBalance + totalPaid
 
+  const creditCardsWithLimit = debts.filter(d => d.account_type === 'credit_card' && d.credit_limit)
+  const totalCreditBalance = creditCardsWithLimit.reduce((s, d) => s + d.balance, 0)
+  const totalCreditLimit = creditCardsWithLimit.reduce((s, d) => s + (d.credit_limit ?? 0), 0)
+  const utilization = totalCreditLimit > 0 ? (totalCreditBalance / totalCreditLimit) * 100 : null
+  const utilizationColor = (pct: number) => pct >= 70 ? 'text-red-500' : pct >= 30 ? 'text-amber-500' : 'text-emerald-500'
+  const utilizationBarColor = (pct: number) => pct >= 70 ? 'bg-red-500' : pct >= 30 ? 'bg-amber-400' : 'bg-emerald-500'
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <Loader2 className="animate-spin text-blue-600" size={32} />
@@ -197,6 +204,22 @@ export default function DebtPage() {
           </div>
         </div>
       </div>
+
+      {utilization !== null && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Credit Utilization</p>
+            <p className={cn('text-sm font-bold', utilizationColor(utilization))}>{utilization.toFixed(1)}%</p>
+          </div>
+          <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+            <div className={cn('h-full rounded-full transition-all', utilizationBarColor(utilization))}
+              style={{ width: `${Math.min(100, utilization)}%` }} />
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+            {fmt(totalCreditBalance)} of {fmt(totalCreditLimit)} across {creditCardsWithLimit.length} card{creditCardsWithLimit.length !== 1 ? 's' : ''} · keep under 30% for the best credit impact
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-3">
@@ -307,6 +330,12 @@ export default function DebtPage() {
                           {debt.is_synced && (
                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
                               Synced
+                            </span>
+                          )}
+                          {debt.account_type === 'credit_card' && debt.credit_limit && (
+                            <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-50 dark:bg-gray-900',
+                              utilizationColor((debt.balance / debt.credit_limit) * 100))}>
+                              {((debt.balance / debt.credit_limit) * 100).toFixed(0)}% utilized
                             </span>
                           )}
                           {debt.due_date_day && (
