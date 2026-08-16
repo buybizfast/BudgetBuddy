@@ -17,7 +17,7 @@ function AccountTypeIcon({ type, subtype }: { type: string; subtype: string | nu
 }
 
 export default function AccountsPage() {
-  const { accounts, items, loading, refresh, syncAll, removeItem } = useAccounts()
+  const { accounts, items, netWorth, loading, refresh, syncAll, removeItem } = useAccounts()
   const [syncing, setSyncing] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
@@ -39,13 +39,7 @@ export default function AccountsPage() {
     byInstitution[inst].push(acct)
   }
 
-  const assets = accounts
-    .filter(a => a.type !== 'credit' && a.type !== 'loan')
-    .reduce((s, a) => s + (a.current_balance ?? 0), 0)
-  const debt = accounts
-    .filter(a => a.type === 'credit' || a.type === 'loan')
-    .reduce((s, a) => s + Math.abs(a.current_balance ?? 0), 0)
-  const netWorth = assets - debt
+  const { assets, liabilities: debt, net_worth: netWorthTotal } = netWorth
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -81,7 +75,7 @@ export default function AccountsPage() {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Net Worth</p>
-            <p className={cn('text-xl font-bold', netWorth >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500')}>{fmt(netWorth)}</p>
+            <p className={cn('text-xl font-bold', netWorthTotal >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500')}>{fmt(netWorthTotal)}</p>
           </div>
         </div>
 

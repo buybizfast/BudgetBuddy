@@ -21,7 +21,11 @@ async def _current_snapshot(db: AsyncSession) -> dict:
     debts = (await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False))).scalars().all()
     goals = (await db.execute(select(SavingsGoal).where(SavingsGoal.is_completed == False))).scalars().all()
 
-    bank_assets = sum(float(a.current_balance) for a in accounts if float(a.current_balance) > 0)
+    # Credit/loan accounts' current_balance represents what's owed, not an
+    # asset — they're already counted in `liabilities` via DebtAccount below.
+    # Filtering by type (not just "balance > 0") avoids double-counting them
+    # as both an asset and a liability.
+    bank_assets = sum(float(a.current_balance) for a in accounts if a.type not in ("credit", "loan"))
     savings_assets = sum(float(g.current_amount) for g in goals)
     assets = bank_assets + savings_assets
     liabilities = sum(float(d.balance) for d in debts)

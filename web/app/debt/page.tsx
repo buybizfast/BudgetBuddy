@@ -38,9 +38,9 @@ function fmtMonthYear(iso: string) {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
-interface PlanDebt { id: string; name: string; balance: number; minimum_payment: number; interest_rate: number; payoff_month: number }
+interface PlanDebt { id: string; name: string; balance: number; minimum_payment: number; interest_rate: number; payoff_month: number; budgeted_extra: number }
 
-interface PayoffPlan { debts: PlanDebt[]; total_months: number; total_interest: number; strategy: string }
+interface PayoffPlan { debts: PlanDebt[]; total_months: number; total_interest: number; strategy: string; total_budgeted_extra: number }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -464,6 +464,11 @@ export default function DebtPage() {
 
             {plan && (
               <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                {plan.total_budgeted_extra > 0 && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <DollarSign size={11} />Includes {fmt(plan.total_budgeted_extra)}/mo already budgeted above minimums
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
                     <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Debt Free In</p>

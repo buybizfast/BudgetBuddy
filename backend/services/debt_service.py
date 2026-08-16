@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.db.models import DebtAccount, DebtPayment
+from backend.db.models import BudgetCategory, BudgetGroup, BudgetMonth, DebtAccount, DebtPayment
 
 log = logging.getLogger("services.debt")
 
@@ -196,15 +196,50 @@ async def add_payment(debt_id: str, amount: float, paid_on: date, note: str | No
     return {"id": str(payment.id), "amount": amount, "paid_on": paid_on.isoformat(), "note": note}
 
 
+async def get_debt_budget_extras(db: AsyncSession) -> dict[str, float]:
+    """Amounts budgeted above each debt's minimum payment this calendar month,
+    read from the Debt group's auto-synced budget categories (see
+    budget_service._sync_debt_categories, which never overwrites a category's
+    budgeted amount once created — so a user raising it above the minimum
+    payment to plan an extra payment sticks there). Returns {} if no budget
+    exists yet for the current month; doesn't create one as a side effect of
+    just viewing the payoff plan."""
+    today = date.today()
+    result = await db.execute(
+        select(BudgetMonth).where(BudgetMonth.year == today.year, BudgetMonth.month == today.month)
+    )
+    bm = result.scalar_one_or_none()
+    if not bm:
+        return {}
+    result = await db.execute(
+        select(BudgetCategory, DebtAccount.minimum_payment)
+        .join(BudgetGroup, BudgetCategory.group_id == BudgetGroup.id)
+        .join(DebtAccount, BudgetCategory.debt_account_id == DebtAccount.id)
+        .where(BudgetGroup.budget_month_id == bm.id, BudgetCategory.debt_account_id.isnot(None))
+    )
+    extras: dict[str, float] = {}
+    for cat, min_payment in result.all():
+        extra = float(cat.budgeted) - float(min_payment or 0)
+        if extra > 0:
+            extras[str(cat.debt_account_id)] = extra
+    return extras
+
+
 async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSession) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False).order_by(DebtAccount.sort_order))
     debts = list(result.scalars().all())
     if not debts:
-        return {"debts": [], "total_months": 0, "total_interest": 0.0, "strategy": strategy}
+        return {"debts": [], "total_months": 0, "total_interest": 0.0, "strategy": strategy, "total_budgeted_extra": 0.0}
+    budget_extras = await get_debt_budget_extras(db)
     ordered = sorted(debts, key=lambda d: float(d.balance)) if strategy == "snowball" else sorted(debts, key=lambda d: float(d.interest_rate), reverse=True)
     balances = {d.id: float(d.balance) for d in ordered}
     rates = {d.id: float(d.interest_rate) / 100 / 12 for d in ordered}
-    mins = {d.id: float(d.minimum_payment) for d in ordered}
+    # Whatever's already budgeted above the minimum (planned in the Budget
+    # page) is paid automatically every month in the simulation, on top of
+    # the required minimum; `extra_monthly` (typed on this page) is separate,
+    # additional cash distributed across debts per the snowball/avalanche
+    # strategy below.
+    mins = {d.id: float(d.minimum_payment) + budget_extras.get(str(d.id), 0) for d in ordered}
     payoff_month: dict[str, int] = {}
     total_interest = 0.0
     month = 0
@@ -237,8 +272,10 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
             if balances[d.id] <= 0:
                 payoff_month[d.id] = month
     plan = [{"id": str(d.id), "name": d.name, "balance": float(d.balance), "minimum_payment": float(d.minimum_payment),
-              "interest_rate": float(d.interest_rate), "payoff_month": payoff_month.get(d.id, max_months)} for d in ordered]
-    return {"debts": plan, "total_months": month, "total_interest": round(total_interest, 2), "strategy": strategy}
+              "interest_rate": float(d.interest_rate), "payoff_month": payoff_month.get(d.id, max_months),
+              "budgeted_extra": round(budget_extras.get(str(d.id), 0), 2)} for d in ordered]
+    return {"debts": plan, "total_months": month, "total_interest": round(total_interest, 2), "strategy": strategy,
+            "total_budgeted_extra": round(sum(budget_extras.values()), 2)}
 
 
 def _serialize(debt: DebtAccount) -> dict[str, Any]:
