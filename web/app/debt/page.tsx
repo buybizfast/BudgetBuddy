@@ -903,10 +903,14 @@ const PAYMENT_SCHEDULE_VISIBLE_MONTHS = 12
 
 function PaymentSchedule({ plan }: { plan: StrategyPlan }) {
   const [expanded, setExpanded] = useState(false)
-  const months = plan.schedule.filter(m => m.month > 0 && m.payments.length > 0)
+  // One column per debt, in payoff order (matches the schedule/calendar
+  // ordering below) — fixed across all rows so amounts line up like a
+  // spreadsheet, even once a debt is paid off (its column just goes blank).
+  const debtColumns = [...plan.debts].sort((a, b) => a.payoff_month - b.payoff_month)
+  const months = plan.schedule.filter(m => m.month > 0)
   const visible = expanded ? months : months.slice(0, PAYMENT_SCHEDULE_VISIBLE_MONTHS)
 
-  if (months.length === 0) {
+  if (months.length === 0 || debtColumns.length === 0) {
     return null
   }
 
@@ -914,29 +918,43 @@ function PaymentSchedule({ plan }: { plan: StrategyPlan }) {
     <div className="mt-2">
       <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Payment Schedule</p>
       <div className="border border-gray-100 dark:border-gray-700 rounded-xl overflow-hidden">
-        <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
-          {visible.map(m => {
-            const monthTotal = m.payments.reduce((s, p) => s + p.payment, 0)
-            return (
-              <div key={m.month} className="px-3 py-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fmtMonthYear(m.date)}</span>
-                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{fmt(monthTotal)} total</span>
-                </div>
-                <div className="space-y-0.5">
-                  {m.payments.map(p => (
-                    <div key={p.id} className="flex items-center justify-between text-[11px]">
-                      <span className="text-gray-500 dark:text-gray-400 truncate">{p.name}</span>
-                      <span className="flex items-center gap-2 shrink-0 ml-2">
-                        <span className="text-gray-700 dark:text-gray-300 font-medium">{fmt(p.payment)}</span>
-                        <span className="text-gray-400 dark:text-gray-500 w-16 text-right">{fmt(p.balance)} left</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+        <div className="max-h-80 overflow-auto">
+          <table className="w-full text-[11px] border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-gray-50 dark:bg-gray-900">
+                <th className="text-left font-semibold text-gray-500 dark:text-gray-400 px-2.5 py-2 whitespace-nowrap">Month</th>
+                {debtColumns.map(d => (
+                  <th key={d.id} className="text-right font-semibold text-gray-500 dark:text-gray-400 px-2.5 py-2 whitespace-nowrap">
+                    {d.name}
+                  </th>
+                ))}
+                <th className="text-right font-semibold text-gray-700 dark:text-gray-300 px-2.5 py-2 whitespace-nowrap border-l border-gray-100 dark:border-gray-700">
+                  Total Balance
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+              {visible.map(m => {
+                const byDebtId = new Map(m.payments.map(p => [p.id, p]))
+                return (
+                  <tr key={m.month} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                    <td className="px-2.5 py-1.5 text-gray-700 dark:text-gray-300 font-medium whitespace-nowrap">{fmtMonthYear(m.date)}</td>
+                    {debtColumns.map(d => {
+                      const p = byDebtId.get(d.id)
+                      return (
+                        <td key={d.id} className="text-right px-2.5 py-1.5 text-gray-600 dark:text-gray-400 whitespace-nowrap tabular-nums">
+                          {p ? fmt(p.payment) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                        </td>
+                      )
+                    })}
+                    <td className="text-right px-2.5 py-1.5 font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap tabular-nums border-l border-gray-100 dark:border-gray-700">
+                      {fmt(m.total_balance)}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
       {months.length > PAYMENT_SCHEDULE_VISIBLE_MONTHS && (
