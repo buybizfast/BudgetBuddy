@@ -917,6 +917,53 @@ function PaymentSchedule({ plan }: { plan: StrategyPlan }) {
   return (
     <div className="mt-2">
       <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Payment Schedule</p>
+
+      {/* Per-debt summary — mirrors the classic debt-snowball-calculator layout */}
+      <div className="border border-gray-100 dark:border-gray-700 rounded-xl overflow-hidden mb-3">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px] border-collapse">
+            <tbody>
+              <tr className="bg-gray-50 dark:bg-gray-900">
+                <td className="px-2.5 py-1.5 font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Creditor</td>
+                {debtColumns.map(d => (
+                  <td key={d.id} className="text-right px-2.5 py-1.5 font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.name}</td>
+                ))}
+              </tr>
+              <tr className="border-t border-gray-50 dark:border-gray-800">
+                <td className="px-2.5 py-1.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">Balance</td>
+                {debtColumns.map(d => (
+                  <td key={d.id} className="text-right px-2.5 py-1.5 text-gray-700 dark:text-gray-300 tabular-nums whitespace-nowrap">{fmt(d.balance)}</td>
+                ))}
+              </tr>
+              <tr className="border-t border-gray-50 dark:border-gray-800">
+                <td className="px-2.5 py-1.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">Rate</td>
+                {debtColumns.map(d => (
+                  <td key={d.id} className="text-right px-2.5 py-1.5 text-gray-700 dark:text-gray-300 tabular-nums whitespace-nowrap">{d.interest_rate.toFixed(2)}%</td>
+                ))}
+              </tr>
+              <tr className="border-t border-gray-50 dark:border-gray-800">
+                <td className="px-2.5 py-1.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">Base Payment</td>
+                {debtColumns.map(d => (
+                  <td key={d.id} className="text-right px-2.5 py-1.5 text-gray-700 dark:text-gray-300 tabular-nums whitespace-nowrap">{fmt(d.minimum_payment)}</td>
+                ))}
+              </tr>
+              <tr className="border-t border-gray-50 dark:border-gray-800">
+                <td className="px-2.5 py-1.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">Months to Pay Off</td>
+                {debtColumns.map(d => (
+                  <td key={d.id} className="text-right px-2.5 py-1.5 text-gray-700 dark:text-gray-300 tabular-nums whitespace-nowrap">{d.payoff_month}</td>
+                ))}
+              </tr>
+              <tr className="border-t border-gray-50 dark:border-gray-800">
+                <td className="px-2.5 py-1.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">Month Paid Off</td>
+                {debtColumns.map(d => (
+                  <td key={d.id} className="text-right px-2.5 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.payoff_date ? fmtMonthYear(d.payoff_date) : '—'}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="border border-gray-100 dark:border-gray-700 rounded-xl overflow-hidden">
         <div className="max-h-80 overflow-auto">
           <table className="w-full text-[11px] border-collapse">
