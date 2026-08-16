@@ -38,12 +38,25 @@ function fmtMonthYear(iso: string) {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
-interface PlanDebt { id: string; name: string; balance: number; minimum_payment: number; interest_rate: number; payoff_month: number; budgeted_extra: number }
+interface PlanDebt { id: string; name: string; balance: number; minimum_payment: number; interest_rate: number; payoff_month: number; budgeted_extra: number; payoff_date?: string }
 
 interface PayoffPlan { debts: PlanDebt[]; total_months: number; total_interest: number; strategy: string; total_budgeted_extra: number }
 
+interface SchedulePoint { month: number; date: string; total_balance: number }
+
+interface StrategyPlan { debts: Required<PlanDebt>[]; total_months: number; total_interest: number; strategy: string; total_budgeted_extra: number; schedule: SchedulePoint[] }
+
+interface ComparePlan { snowball: StrategyPlan; avalanche: StrategyPlan }
+
+const SNOWBALL_COLOR = '#3b82f6'
+const AVALANCHE_COLOR = '#d97706'
+
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+}
+
+function fmt0(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
 }
 
 export default function DebtPage() {
@@ -555,6 +568,8 @@ export default function DebtPage() {
           </div>
         </div>
       </div>
+
+      {debts.length > 0 && <PayoffForecast />}
       </div>
 
       {detailsModalDebt && (
@@ -648,6 +663,176 @@ function DebtDetailsModal({ debt, saving, onSave, onClose }: {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function PayoffForecast() {
+  const [extra, setExtra] = useState('0')
+  const [compare, setCompare] = useState<ComparePlan | null>(null)
+  const [loadingCompare, setLoadingCompare] = useState(true)
+  const [hoverMonth, setHoverMonth] = useState<number | null>(null)
+  const [scheduleStrategy, setScheduleStrategy] = useState<'snowball' | 'avalanche'>('snowball')
+
+  useEffect(() => {
+    const extraNum = parseFloat(extra) || 0
+    setLoadingCompare(true)
+    const t = setTimeout(() => {
+      apiFetch<ComparePlan>(`/api/v1/debt/plan/compare?extra_monthly=${extraNum}`)
+        .then(setCompare)
+        .catch(() => setCompare(null))
+        .finally(() => setLoadingCompare(false))
+    }, 350)
+    return () => clearTimeout(t)
+  }, [extra])
+
+  const W = 640, H = 220, padL = 54, padR = 12, padT = 12, padB = 8
+  const plotW = W - padL - padR, plotH = H - padT - padB
+
+  const maxMonths = compare ? Math.max(compare.snowball.total_months, compare.avalanche.total_months, 1) : 1
+  const maxBalance = compare
+    ? Math.max(compare.snowball.schedule[0]?.total_balance ?? 0, compare.avalanche.schedule[0]?.total_balance ?? 0, 1)
+    : 1
+  const x = (m: number) => padL + (m / maxMonths) * plotW
+  const y = (bal: number) => padT + plotH - (bal / maxBalance) * plotH
+  const pathFor = (schedule: SchedulePoint[]) =>
+    schedule.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.month).toFixed(1)} ${y(p.total_balance).toFixed(1)}`).join(' ')
+  const pointAt = (schedule: SchedulePoint[], month: number) =>
+    schedule.find(p => p.month === month) ?? schedule[schedule.length - 1]
+
+  const handleMove = (e: any) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const svgX = ((e.clientX - rect.left) / rect.width) * W
+    const month = Math.round(((svgX - padL) / plotW) * maxMonths)
+    setHoverMonth(Math.max(0, Math.min(maxMonths, month)))
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <TrendingDown size={14} className="text-blue-600" />
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Payoff Forecast</h3>
+      </div>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
+        Try a sample extra monthly payment and see how it changes your timeline under both strategies.
+      </p>
+
+      <div className="flex items-end gap-3 mb-4 flex-wrap">
+        <div>
+          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Sample Extra Monthly Payment</label>
+          <div className="flex items-center gap-1">
+            <span className="text-gray-400 dark:text-gray-500 text-sm">$</span>
+            <input type="number" min="0" value={extra} onChange={e => setExtra(e.target.value)}
+              className="w-32 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-2 py-1.5 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+        <input type="range" min="0" max="2000" step="25" value={Math.min(parseFloat(extra) || 0, 2000)}
+          onChange={e => setExtra(e.target.value)}
+          aria-label="Sample extra monthly payment"
+          className="flex-1 min-w-[140px] accent-blue-600 mb-2" />
+        {loadingCompare && <Loader2 size={14} className="animate-spin text-gray-400 mb-2 shrink-0" />}
+      </div>
+
+      {!compare ? (
+        <div className="flex justify-center py-10">
+          <Loader2 size={16} className="animate-spin text-gray-400" />
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-4 mb-2 flex-wrap text-xs">
+            <span className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: SNOWBALL_COLOR }} />
+              Snowball — {compare.snowball.total_months} mo, {fmt(compare.snowball.total_interest)} interest
+            </span>
+            <span className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: AVALANCHE_COLOR }} />
+              Avalanche — {compare.avalanche.total_months} mo, {fmt(compare.avalanche.total_interest)} interest
+            </span>
+          </div>
+
+          {(() => {
+            const monthsSaved = Math.abs(compare.snowball.total_months - compare.avalanche.total_months)
+            const fasterStrategy = compare.snowball.total_months <= compare.avalanche.total_months ? 'Snowball' : 'Avalanche'
+            const interestSaved = Math.abs(compare.snowball.total_interest - compare.avalanche.total_interest)
+            const cheaperStrategy = compare.snowball.total_interest <= compare.avalanche.total_interest ? 'Snowball' : 'Avalanche'
+            return (monthsSaved > 0 || interestSaved > 1) && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-3">
+                {monthsSaved > 0 && `${fasterStrategy} finishes ${monthsSaved} mo sooner. `}
+                {interestSaved > 1 && `${cheaperStrategy} saves ${fmt(interestSaved)} in interest.`}
+              </p>
+            )
+          })()}
+
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto touch-none"
+            onMouseMove={handleMove} onMouseLeave={() => setHoverMonth(null)}>
+            {[0, 0.25, 0.5, 0.75, 1].map(f => (
+              <line key={f} x1={padL} x2={W - padR} y1={padT + plotH * f} y2={padT + plotH * f}
+                stroke="currentColor" className="text-gray-100 dark:text-gray-700" strokeWidth={1} />
+            ))}
+            {[0, 0.5, 1].map(f => (
+              <text key={f} x={padL - 8} y={padT + plotH * (1 - f) + 3} textAnchor="end"
+                className="fill-gray-400 dark:fill-gray-500" fontSize="9">
+                {fmt0(maxBalance * f)}
+              </text>
+            ))}
+            <path d={pathFor(compare.snowball.schedule)} fill="none" stroke={SNOWBALL_COLOR} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <path d={pathFor(compare.avalanche.schedule)} fill="none" stroke={AVALANCHE_COLOR} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            {hoverMonth !== null && (
+              <>
+                <line x1={x(hoverMonth)} x2={x(hoverMonth)} y1={padT} y2={padT + plotH}
+                  stroke="currentColor" className="text-gray-300 dark:text-gray-600" strokeWidth={1} strokeDasharray="3,3" />
+                <circle cx={x(hoverMonth)} cy={y(pointAt(compare.snowball.schedule, hoverMonth).total_balance)} r={3.5} fill={SNOWBALL_COLOR} />
+                <circle cx={x(hoverMonth)} cy={y(pointAt(compare.avalanche.schedule, hoverMonth).total_balance)} r={3.5} fill={AVALANCHE_COLOR} />
+              </>
+            )}
+          </svg>
+
+          {hoverMonth !== null && (
+            <div className="flex items-center justify-center gap-4 text-xs mb-2">
+              <span className="text-gray-400 dark:text-gray-500">{fmtMonthYear(pointAt(compare.snowball.schedule, hoverMonth).date)}</span>
+              <span style={{ color: SNOWBALL_COLOR }} className="font-semibold">{fmt(pointAt(compare.snowball.schedule, hoverMonth).total_balance)}</span>
+              <span style={{ color: AVALANCHE_COLOR }} className="font-semibold">{fmt(pointAt(compare.avalanche.schedule, hoverMonth).total_balance)}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mt-4 mb-2">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Payoff Schedule</p>
+            <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+              <button onClick={() => setScheduleStrategy('snowball')}
+                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'snowball' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                Snowball
+              </button>
+              <button onClick={() => setScheduleStrategy('avalanche')}
+                className={cn('text-xs px-2.5 py-1 rounded-md transition-colors font-medium', scheduleStrategy === 'avalanche' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                Avalanche
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {[...(scheduleStrategy === 'snowball' ? compare.snowball : compare.avalanche).debts]
+              .sort((a, b) => a.payoff_month - b.payoff_month)
+              .map((d, i) => (
+                <div key={d.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-4 h-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center justify-center text-[9px] font-bold text-gray-500 dark:text-gray-400 shrink-0">
+                      {i + 1}
+                    </span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{d.name}</span>
+                    {d.budgeted_extra > 0 && (
+                      <span className="text-[9px] font-medium px-1 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 shrink-0">
+                        +{fmt0(d.budgeted_extra)} budgeted
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-gray-500 dark:text-gray-400 shrink-0 ml-2">
+                    {d.payoff_date ? fmtMonthYear(d.payoff_date) : `${d.payoff_month} mo`}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

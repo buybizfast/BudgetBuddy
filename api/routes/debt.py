@@ -19,6 +19,12 @@ async def payoff_plan(extra_monthly: float = 0.0, strategy: str = "snowball", db
         raise HTTPException(status_code=400, detail="strategy must be 'snowball' or 'avalanche'")
     return await debt_service.compute_payoff_plan(extra_monthly, strategy, db)
 
+@router.get("/plan/compare")
+async def payoff_plan_compare(extra_monthly: float = 0.0, db: AsyncSession = Depends(get_session)):
+    """Both snowball and avalanche plans (with month-by-month balance
+    trajectories) for the graph/schedule comparison view."""
+    return await debt_service.compute_payoff_comparison(extra_monthly, db)
+
 @router.get("/")
 async def list_debts(db: AsyncSession = Depends(get_session)):
     return await debt_service.list_debts(db)

@@ -247,11 +247,19 @@ async def get_debt_budget_extras(db: AsyncSession) -> dict[str, float]:
     return extras
 
 
+def _month_offset_date(months: int) -> str:
+    today = date.today()
+    year = today.year + (today.month - 1 + months) // 12
+    month = (today.month - 1 + months) % 12 + 1
+    return date(year, month, 1).isoformat()
+
+
 async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSession) -> dict[str, Any]:
     result = await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False).order_by(DebtAccount.sort_order))
     debts = list(result.scalars().all())
     if not debts:
-        return {"debts": [], "total_months": 0, "total_interest": 0.0, "strategy": strategy, "total_budgeted_extra": 0.0}
+        return {"debts": [], "total_months": 0, "total_interest": 0.0, "strategy": strategy,
+                "total_budgeted_extra": 0.0, "schedule": []}
     budget_extras = await get_debt_budget_extras(db)
     ordered = sorted(debts, key=lambda d: float(d.balance)) if strategy == "snowball" else sorted(debts, key=lambda d: float(d.interest_rate), reverse=True)
     balances = {d.id: float(d.balance) for d in ordered}
@@ -266,6 +274,8 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
     total_interest = 0.0
     month = 0
     max_months = 600
+    # Monthly total-balance trajectory, for graphing — starts at month 0 (today).
+    schedule = [{"month": 0, "date": _month_offset_date(0), "total_balance": round(sum(balances.values()), 2)}]
     while any(balances[d.id] > 0.01 for d in ordered) and month < max_months:
         month += 1
         freed = 0.0
@@ -293,11 +303,22 @@ async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSess
             remaining_extra -= extra_apply
             if balances[d.id] <= 0:
                 payoff_month[d.id] = month
+        schedule.append({"month": month, "date": _month_offset_date(month), "total_balance": round(max(sum(balances.values()), 0), 2)})
     plan = [{"id": str(d.id), "name": d.name, "balance": float(d.balance), "minimum_payment": float(d.minimum_payment),
-              "interest_rate": float(d.interest_rate), "payoff_month": payoff_month.get(d.id, max_months),
+              "interest_rate": float(d.interest_rate),
+              "payoff_month": payoff_month.get(d.id, max_months),
+              "payoff_date": _month_offset_date(payoff_month.get(d.id, max_months)),
               "budgeted_extra": round(budget_extras.get(str(d.id), 0), 2)} for d in ordered]
     return {"debts": plan, "total_months": month, "total_interest": round(total_interest, 2), "strategy": strategy,
-            "total_budgeted_extra": round(sum(budget_extras.values()), 2)}
+            "total_budgeted_extra": round(sum(budget_extras.values()), 2), "schedule": schedule}
+
+
+async def compute_payoff_comparison(extra_monthly: float, db: AsyncSession) -> dict[str, Any]:
+    """Both strategies computed together so the graph can plot them side by
+    side for comparison, sharing the same budgeted-extras snapshot."""
+    snowball = await compute_payoff_plan(extra_monthly, "snowball", db)
+    avalanche = await compute_payoff_plan(extra_monthly, "avalanche", db)
+    return {"snowball": snowball, "avalanche": avalanche}
 
 
 def _serialize(debt: DebtAccount, credit_limit: Optional[float] = None) -> dict[str, Any]:
