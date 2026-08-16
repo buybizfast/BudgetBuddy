@@ -58,6 +58,7 @@ export default function DebtPage() {
   const [payingId, setPayingId] = useState<string | null>(null)
   const [detailsModalDebt, setDetailsModalDebt] = useState<Debt | null>(null)
   const [savingDetailsId, setSavingDetailsId] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -67,15 +68,21 @@ export default function DebtPage() {
   })
   const [addingDebt, setAddingDebt] = useState(false)
 
+  // Only toggles the page-level spinner on first load. Mutation handlers
+  // (payments, details edits, deletes) call fetchDebts() afterward too — if
+  // that also flipped `loading`, the whole page (including any open modal)
+  // would flash to a full-screen spinner and back on every save.
   const fetchDebts = useCallback(async () => {
-    setLoading(true)
     try {
       const res = await apiFetch<any[]>(`/api/v1/debt/`)
       setDebts(res)
-    } catch { setDebts([]) } finally { setLoading(false) }
+    } catch { setDebts([]) }
   }, [])
 
-  useEffect(() => { fetchDebts() }, [fetchDebts])
+  useEffect(() => {
+    setLoading(true)
+    fetchDebts().finally(() => setLoading(false))
+  }, [fetchDebts])
 
   const calcPlan = async () => {
     setCalcLoading(true)
@@ -104,21 +111,37 @@ export default function DebtPage() {
     account_type: string; minimum_payment: string; interest_rate: string; original_balance: string; credit_limit: string
   }) => {
     setSavingDetailsId(debtId)
+    setSaveError(null)
+    const patch = {
+      account_type: details.account_type,
+      minimum_payment: details.minimum_payment !== '' ? parseFloat(details.minimum_payment) : null,
+      interest_rate: details.interest_rate !== '' ? parseFloat(details.interest_rate) : null,
+      original_balance: details.original_balance !== '' ? parseFloat(details.original_balance) : null,
+      credit_limit: details.credit_limit !== '' ? parseFloat(details.credit_limit) : null,
+    }
+    // Apply immediately so the modal closes and numbers update without
+    // waiting on a round trip; fetchDebts() below reconciles with
+    // server-computed fields (payoff estimate, etc.) right after.
+    setDebts(prev => prev.map(d => d.id === debtId ? {
+      ...d,
+      account_type: patch.account_type,
+      minimum_payment: patch.minimum_payment ?? d.minimum_payment,
+      interest_rate: patch.interest_rate ?? d.interest_rate,
+      original_balance: patch.original_balance ?? d.original_balance,
+      credit_limit: patch.credit_limit ?? d.credit_limit,
+    } : d))
+    setDetailsModalDebt(null)
     try {
       await apiFetch(`/api/v1/debt/${debtId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_type: details.account_type,
-          minimum_payment: details.minimum_payment !== '' ? parseFloat(details.minimum_payment) : null,
-          interest_rate: details.interest_rate !== '' ? parseFloat(details.interest_rate) : null,
-          original_balance: details.original_balance !== '' ? parseFloat(details.original_balance) : null,
-          credit_limit: details.credit_limit !== '' ? parseFloat(details.credit_limit) : null,
-        })
+        body: JSON.stringify(patch)
       })
       await fetchDebts()
-      setDetailsModalDebt(null)
-    } catch {} finally { setSavingDetailsId(null) }
+    } catch {
+      setSaveError('Failed to save debt details — please try again.')
+      await fetchDebts()
+    } finally { setSavingDetailsId(null) }
   }
 
   const deleteDebt = async (id: string) => {
@@ -182,6 +205,15 @@ export default function DebtPage() {
         }
       />
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+
+      {saveError && (
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl px-4 py-2.5 flex items-center justify-between text-sm text-red-600 dark:text-red-300">
+          {saveError}
+          <button onClick={() => setSaveError(null)} aria-label="Dismiss" className="text-red-400 hover:text-red-600 dark:hover:text-red-200 ml-3">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
