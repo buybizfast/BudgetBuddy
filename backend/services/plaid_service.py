@@ -129,12 +129,16 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
         available_bal = balances.get("available")
         if available_bal is not None:
             available_bal = float(available_bal)
+        credit_limit = balances.get("limit")
+        if credit_limit is not None:
+            credit_limit = float(credit_limit)
         acct_type = _plaid_str(acct.get("type"), "depository")
         acct_subtype = _plaid_str(acct.get("subtype"))
         acct_name = acct.get("name", "Account")
         if existing:
             existing.current_balance = current_bal
             existing.available_balance = available_bal
+            existing.credit_limit = credit_limit
             existing.name = acct.get("name", existing.name)
             existing.type = acct_type
             existing.subtype = acct_subtype
@@ -146,8 +150,8 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
                 plaid_item_id=plaid_item.id, account_id=acct["account_id"],
                 name=acct_name, official_name=acct.get("official_name"),
                 type=acct_type, subtype=acct_subtype,
-                current_balance=current_bal, available_balance=available_bal, mask=acct.get("mask"),
-                institution_name=plaid_item.institution_name,
+                current_balance=current_bal, available_balance=available_bal, credit_limit=credit_limit,
+                mask=acct.get("mask"), institution_name=plaid_item.institution_name,
             ))
         log.info("Plaid account synced: name=%r type=%r subtype=%r balance=%s bank_account_id=%s",
                  acct_name, acct_type, acct_subtype, current_bal, bank_account_id)

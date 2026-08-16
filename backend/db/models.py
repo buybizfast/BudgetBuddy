@@ -44,6 +44,7 @@ class BankAccount(Base):
     subtype = Column(String(50))
     current_balance = Column(Numeric(12, 2), nullable=False, default=0)
     available_balance = Column(Numeric(12, 2))
+    credit_limit = Column(Numeric(12, 2), nullable=True)  # from Plaid balances.limit — credit cards only
     currency = Column(String(10), nullable=False, default="USD")
     mask = Column(String(10))
     is_active = Column(Boolean, nullable=False, default=True)

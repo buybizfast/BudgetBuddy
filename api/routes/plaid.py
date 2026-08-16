@@ -58,6 +58,7 @@ async def list_accounts(db: AsyncSession = Depends(get_session)):
     return [{"id": str(a.id), "account_id": a.account_id, "name": a.name, "official_name": a.official_name,
              "type": a.type, "subtype": a.subtype, "current_balance": float(a.current_balance),
              "available_balance": float(a.available_balance) if a.available_balance is not None else None,
+             "credit_limit": float(a.credit_limit) if a.credit_limit is not None else None,
              "mask": a.mask, "institution_name": a.institution_name} for a in accounts]
 
 

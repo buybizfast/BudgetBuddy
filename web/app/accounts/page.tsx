@@ -41,6 +41,13 @@ export default function AccountsPage() {
 
   const { assets, liabilities: debt, net_worth: netWorthTotal } = netWorth
 
+  const creditCards = accounts.filter(a => a.type === 'credit' && a.credit_limit)
+  const totalCreditBalance = creditCards.reduce((s, a) => s + (a.current_balance ?? 0), 0)
+  const totalCreditLimit = creditCards.reduce((s, a) => s + (a.credit_limit ?? 0), 0)
+  const utilization = totalCreditLimit > 0 ? (totalCreditBalance / totalCreditLimit) * 100 : null
+  const utilizationColor = (pct: number) => pct >= 70 ? 'text-red-500' : pct >= 30 ? 'text-amber-500' : 'text-emerald-500'
+  const utilizationBarColor = (pct: number) => pct >= 70 ? 'bg-red-500' : pct >= 30 ? 'bg-amber-400' : 'bg-emerald-500'
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <Loader2 className="animate-spin text-blue-600" size={32} />
@@ -78,6 +85,23 @@ export default function AccountsPage() {
             <p className={cn('text-xl font-bold', netWorthTotal >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500')}>{fmt(netWorthTotal)}</p>
           </div>
         </div>
+
+        {/* Credit Utilization */}
+        {utilization !== null && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Credit Utilization</p>
+              <p className={cn('text-sm font-bold', utilizationColor(utilization))}>{utilization.toFixed(1)}%</p>
+            </div>
+            <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+              <div className={cn('h-full rounded-full transition-all', utilizationBarColor(utilization))}
+                style={{ width: `${Math.min(100, utilization)}%` }} />
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+              {fmt(totalCreditBalance)} of {fmt(totalCreditLimit)} across {creditCards.length} card{creditCards.length !== 1 ? 's' : ''} · keep under 30% for the best credit impact
+            </p>
+          </div>
+        )}
 
         {accounts.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
@@ -150,7 +174,11 @@ export default function AccountsPage() {
                           <p className={cn('text-sm font-semibold', (acct.type === 'credit' || acct.type === 'loan') ? 'text-red-500' : 'text-gray-900 dark:text-gray-100')}>
                             {fmt(acct.current_balance)}
                           </p>
-                          {acct.available_balance !== null && acct.available_balance !== acct.current_balance && (
+                          {acct.type === 'credit' && acct.credit_limit ? (
+                            <p className={cn('text-xs font-medium', utilizationColor((acct.current_balance / acct.credit_limit) * 100))}>
+                              {((acct.current_balance / acct.credit_limit) * 100).toFixed(0)}% of {fmt(acct.credit_limit)}
+                            </p>
+                          ) : acct.available_balance !== null && acct.available_balance !== acct.current_balance && (
                             <p className="text-xs text-gray-400 dark:text-gray-500">{fmt(acct.available_balance)} avail.</p>
                           )}
                         </div>
