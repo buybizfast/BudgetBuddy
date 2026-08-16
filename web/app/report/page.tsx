@@ -259,7 +259,7 @@ export default function ReportPage() {
                     <p className="text-xs font-semibold text-gray-800 dark:text-gray-300 truncate">{t.merchant_name || t.name}</p>
                     <p className="text-[10px] text-gray-400 dark:text-gray-500">{t.date} · {t.budget_category || t.account_name}</p>
                   </div>
-                  <span className={cn('text-xs font-bold ml-3 shrink-0', t.amount < 0 ? 'text-green-600' : 'text-gray-900 dark:text-gray-100')}>
+                  <span className={cn('text-xs font-bold ml-3 shrink-0', t.amount < 0 ? 'text-blue-600' : 'text-red-500')}>
                     {t.amount < 0 ? '+' : ''}{fmt2(Math.abs(t.amount))}
                   </span>
                 </div>

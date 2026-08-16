@@ -337,7 +337,7 @@ export default function TransactionsPage() {
                         </button>
                       )}
                       <div className="text-right shrink-0">
-                        <span className={cn('text-sm font-semibold whitespace-nowrap', isTransfer(tx) ? 'text-gray-500 dark:text-gray-400' : tx.amount < 0 ? 'text-blue-600' : 'text-gray-900 dark:text-gray-100')}>
+                        <span className={cn('text-sm font-semibold whitespace-nowrap', isTransfer(tx) ? 'text-gray-500 dark:text-gray-400' : tx.amount < 0 ? 'text-blue-600' : 'text-red-500')}>
                           {tx.amount < 0 && !isTransfer(tx) ? '+' : ''}{fmt(Math.abs(tx.amount))}
                         </span>
                         {isTransfer(tx) && <p className="text-[10px] text-gray-400 dark:text-gray-500">Transfer</p>}
