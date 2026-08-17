@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import Paycheck, PaycheckOccurrenceOverride
 
@@ -39,16 +40,19 @@ def _serialize(p: Paycheck) -> dict:
 
 
 @router.get("/")
-async def list_paychecks(db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(Paycheck).order_by(Paycheck.next_date))
+async def list_paychecks(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(Paycheck).where(Paycheck.user_id == user_id).order_by(Paycheck.next_date))
     return [_serialize(p) for p in result.scalars().all()]
 
 
 @router.get("/occurrences")
-async def list_occurrence_overrides(db: AsyncSession = Depends(get_session)):
+async def list_occurrence_overrides(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Return all per-occurrence overrides, for clients that compute schedule
     dates locally and need to merge in any edited amount/name."""
-    result = await db.execute(select(PaycheckOccurrenceOverride))
+    result = await db.execute(
+        select(PaycheckOccurrenceOverride).join(Paycheck, PaycheckOccurrenceOverride.paycheck_id == Paycheck.id)
+        .where(Paycheck.user_id == user_id)
+    )
     return [
         {
             "id": o.id,
@@ -70,10 +74,11 @@ class PaycheckRequest(BaseModel):
 
 
 @router.post("/")
-async def create_paycheck(body: PaycheckRequest, db: AsyncSession = Depends(get_session)):
+async def create_paycheck(body: PaycheckRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     if body.frequency not in ("weekly", "biweekly", "semimonthly", "monthly"):
         raise HTTPException(status_code=400, detail="Invalid frequency")
     paycheck = Paycheck(
+        user_id=user_id,
         source=body.source.strip(),
         amount=body.amount,
         frequency=body.frequency,
@@ -95,8 +100,8 @@ class PaycheckUpdateRequest(BaseModel):
 
 
 @router.patch("/{paycheck_id}")
-async def update_paycheck(paycheck_id: str, body: PaycheckUpdateRequest, db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(Paycheck).where(Paycheck.id == paycheck_id))
+async def update_paycheck(paycheck_id: str, body: PaycheckUpdateRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(Paycheck).where(Paycheck.id == paycheck_id, Paycheck.user_id == user_id))
     paycheck = result.scalar_one_or_none()
     if not paycheck:
         raise HTTPException(status_code=404, detail="Paycheck not found")
@@ -119,8 +124,8 @@ async def update_paycheck(paycheck_id: str, body: PaycheckUpdateRequest, db: Asy
 
 
 @router.delete("/{paycheck_id}")
-async def delete_paycheck(paycheck_id: str, db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(Paycheck).where(Paycheck.id == paycheck_id))
+async def delete_paycheck(paycheck_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(Paycheck).where(Paycheck.id == paycheck_id, Paycheck.user_id == user_id))
     paycheck = result.scalar_one_or_none()
     if not paycheck:
         raise HTTPException(status_code=404, detail="Paycheck not found")
@@ -130,13 +135,13 @@ async def delete_paycheck(paycheck_id: str, db: AsyncSession = Depends(get_sessi
 
 
 @router.get("/upcoming")
-async def get_upcoming(days_ahead: int = Query(default=30, ge=1, le=90), db: AsyncSession = Depends(get_session)):
+async def get_upcoming(days_ahead: int = Query(default=30, ge=1, le=90), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Return individual paycheck occurrences within the next N days, advancing
     each schedule's stored next_date forward as occurrences pass."""
     today = date.today()
     cutoff = today + timedelta(days=days_ahead)
 
-    result = await db.execute(select(Paycheck).where(Paycheck.active == True))  # noqa: E712
+    result = await db.execute(select(Paycheck).where(Paycheck.user_id == user_id, Paycheck.active == True))  # noqa: E712
     paychecks = result.scalars().all()
 
     overrides_by_paycheck: dict[str, dict[date, PaycheckOccurrenceOverride]] = {}
@@ -204,11 +209,12 @@ async def update_occurrence(
     paycheck_id: str,
     occurrence_date: date,
     body: OccurrenceUpdateRequest,
+    user_id: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ):
     """Edit the amount/name of a single generated paycheck occurrence,
     without affecting the recurring schedule or other occurrences."""
-    result = await db.execute(select(Paycheck).where(Paycheck.id == paycheck_id))
+    result = await db.execute(select(Paycheck).where(Paycheck.id == paycheck_id, Paycheck.user_id == user_id))
     paycheck = result.scalar_one_or_none()
     if not paycheck:
         raise HTTPException(status_code=404, detail="Paycheck not found")
@@ -236,8 +242,11 @@ async def update_occurrence(
 
 
 @router.delete("/{paycheck_id}/occurrences/{occurrence_date}")
-async def revert_occurrence(paycheck_id: str, occurrence_date: date, db: AsyncSession = Depends(get_session)):
+async def revert_occurrence(paycheck_id: str, occurrence_date: date, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Remove a per-occurrence override, reverting it back to the schedule's defaults."""
+    result = await db.execute(select(Paycheck).where(Paycheck.id == paycheck_id, Paycheck.user_id == user_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Paycheck not found")
     result = await db.execute(
         select(PaycheckOccurrenceOverride).where(
             PaycheckOccurrenceOverride.paycheck_id == paycheck_id,

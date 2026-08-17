@@ -47,7 +47,7 @@ def _get_client():
     return plaid_api.PlaidApi(plaid.ApiClient(configuration))
 
 
-async def create_link_token(user_id: str = "default-user") -> str:
+async def create_link_token(user_id: str) -> str:
     client = _get_client()
     kwargs: dict[str, Any] = dict(
         # "liabilities" gives real minimum payment / interest rate / due dates
@@ -67,7 +67,7 @@ async def create_link_token(user_id: str = "default-user") -> str:
     return response["link_token"]
 
 
-async def exchange_public_token(public_token: str, db: AsyncSession) -> dict[str, Any]:
+async def exchange_public_token(public_token: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
     client = _get_client()
     exchange_response = client.item_public_token_exchange(
         ItemPublicTokenExchangeRequest(public_token=public_token)
@@ -89,14 +89,14 @@ async def exchange_public_token(public_token: str, db: AsyncSession) -> dict[str
     except Exception:
         pass
 
-    result = await db.execute(select(PlaidItem).where(PlaidItem.item_id == item_id))
+    result = await db.execute(select(PlaidItem).where(PlaidItem.item_id == item_id, PlaidItem.user_id == user_id))
     existing = result.scalar_one_or_none()
     if existing:
         existing.access_token = access_token
         existing.institution_name = institution_name
         plaid_item = existing
     else:
-        plaid_item = PlaidItem(item_id=item_id, access_token=access_token,
+        plaid_item = PlaidItem(user_id=user_id, item_id=item_id, access_token=access_token,
                                institution_id=institution_id, institution_name=institution_name)
         db.add(plaid_item)
 
@@ -122,7 +122,9 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
     from backend.services.debt_service import sync_debt_from_plaid_account
     response = client.accounts_get(AccountsGetRequest(access_token=plaid_item.access_token))
     for acct in response["accounts"]:
-        result = await db.execute(select(BankAccount).where(BankAccount.account_id == acct["account_id"]))
+        result = await db.execute(
+            select(BankAccount).where(BankAccount.account_id == acct["account_id"], BankAccount.user_id == plaid_item.user_id)
+        )
         existing = result.scalar_one_or_none()
         balances = acct.get("balances", {})
         current_bal = float(balances.get("current") or 0)
@@ -146,7 +148,7 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
         else:
             bank_account_id = str(uuid.uuid4())
             db.add(BankAccount(
-                id=bank_account_id,
+                id=bank_account_id, user_id=plaid_item.user_id,
                 plaid_item_id=plaid_item.id, account_id=acct["account_id"],
                 name=acct_name, official_name=acct.get("official_name"),
                 type=acct_type, subtype=acct_subtype,
@@ -157,7 +159,7 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
                  acct_name, acct_type, acct_subtype, current_bal, bank_account_id)
         # Credit cards and loans double as liabilities — keep a matching
         # DebtAccount in sync automatically instead of requiring manual entry.
-        await sync_debt_from_plaid_account(bank_account_id, acct_name, current_bal, acct_type, acct_subtype, db)
+        await sync_debt_from_plaid_account(bank_account_id, plaid_item.user_id, acct_name, current_bal, acct_type, acct_subtype, db)
 
 
 def _day_of_month(date_str: Optional[str]) -> Optional[int]:
@@ -187,7 +189,9 @@ async def _sync_liabilities(client, plaid_item: PlaidItem, db: AsyncSession) -> 
     liabilities = response.get("liabilities") or {}
 
     async def _bank_account_id_for(plaid_account_id: str) -> Optional[str]:
-        result = await db.execute(select(BankAccount).where(BankAccount.account_id == plaid_account_id))
+        result = await db.execute(
+            select(BankAccount).where(BankAccount.account_id == plaid_account_id, BankAccount.user_id == plaid_item.user_id)
+        )
         acct = result.scalar_one_or_none()
         return str(acct.id) if acct else None
 
@@ -248,7 +252,7 @@ async def sync_transactions(item_id: str, db: AsyncSession) -> dict[str, Any]:
             req_kwargs["cursor"] = cursor
         resp = client.transactions_sync(TransactionsSyncRequest(**req_kwargs))
         for txn in resp["added"]:
-            new_obj = await _upsert_transaction(txn, db)
+            new_obj = await _upsert_transaction(txn, plaid_item.user_id, db)
             if new_obj:
                 await auto_assign(new_obj, db)
                 new_txn_summaries.append({"name": new_obj.name, "merchant_name": new_obj.merchant_name,
@@ -256,9 +260,9 @@ async def sync_transactions(item_id: str, db: AsyncSession) -> dict[str, Any]:
                                           "auto_categorized": new_obj.budget_category_id is not None})
                 added_count += 1
         for txn in resp["modified"]:
-            await _upsert_transaction(txn, db)
+            await _upsert_transaction(txn, plaid_item.user_id, db)
         for removed in resp["removed"]:
-            result = await db.execute(select(Transaction).where(Transaction.plaid_transaction_id == removed["transaction_id"]))
+            result = await db.execute(select(Transaction).where(Transaction.plaid_transaction_id == removed["transaction_id"], Transaction.user_id == plaid_item.user_id))
             txn_obj = result.scalar_one_or_none()
             if txn_obj:
                 await db.delete(txn_obj)
@@ -271,12 +275,12 @@ async def sync_transactions(item_id: str, db: AsyncSession) -> dict[str, Any]:
     return {"added": added_count, "new_transactions": new_txn_summaries}
 
 
-async def _upsert_transaction(txn: Any, db: AsyncSession) -> Transaction | None:
-    result = await db.execute(select(BankAccount).where(BankAccount.account_id == txn["account_id"]))
+async def _upsert_transaction(txn: Any, user_id: str, db: AsyncSession) -> Transaction | None:
+    result = await db.execute(select(BankAccount).where(BankAccount.account_id == txn["account_id"], BankAccount.user_id == user_id))
     bank_acct = result.scalar_one_or_none()
     if not bank_acct:
         return None
-    result = await db.execute(select(Transaction).where(Transaction.plaid_transaction_id == txn["transaction_id"]))
+    result = await db.execute(select(Transaction).where(Transaction.plaid_transaction_id == txn["transaction_id"], Transaction.user_id == user_id))
     existing = result.scalar_one_or_none()
     pfc_raw = txn.get("personal_finance_category") or {}
     pfc = pfc_raw.get("detailed") or pfc_raw.get("primary") if pfc_raw else None
@@ -296,7 +300,7 @@ async def _upsert_transaction(txn: Any, db: AsyncSession) -> Transaction | None:
         return None
     else:
         new_txn = Transaction(
-            account_id=bank_acct.id, plaid_transaction_id=txn["transaction_id"],
+            user_id=user_id, account_id=bank_acct.id, plaid_transaction_id=txn["transaction_id"],
             amount=float(txn.get("amount", 0)), date=txn_date, name=txn.get("name", ""),
             merchant_name=txn.get("merchant_name"), category=categories[0] if categories else None,
             category_id=txn.get("category_id"), pending=bool(txn.get("pending", False)),
@@ -308,11 +312,15 @@ async def _upsert_transaction(txn: Any, db: AsyncSession) -> Transaction | None:
         return new_txn
 
 
-async def refresh_all_items(db: AsyncSession) -> dict[str, Any]:
+async def refresh_all_items(db: AsyncSession, user_id: Optional[str] = None) -> dict[str, Any]:
+    """Syncs every active Plaid item. Pass user_id to scope to one user's
+    items (a manual "Sync Now"); omit it for the background sync loop, which
+    processes every user's items each cycle."""
     from sqlalchemy import update as sa_update
-    result = await db.execute(
-        select(PlaidItem).where(PlaidItem.status == "active", PlaidItem.item_id != "manual")
-    )
+    query = select(PlaidItem).where(PlaidItem.status == "active", ~PlaidItem.item_id.like("manual-%"))
+    if user_id is not None:
+        query = query.where(PlaidItem.user_id == user_id)
+    result = await db.execute(query)
     # Capture plain ids up front — db.rollback() (used below on a per-item
     # failure) expires every loaded ORM object, and re-touching an expired
     # attribute on an AsyncSession triggers an implicit lazy-load that isn't

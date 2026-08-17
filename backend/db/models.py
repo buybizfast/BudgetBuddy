@@ -18,9 +18,32 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    email_verified = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
+class PasswordResetToken(Base):
+    """Reset tokens are stored hashed (like passwords) — only the raw token
+    in the emailed link can redeem it, never anything queryable from the DB."""
+    __tablename__ = "password_reset_tokens"
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(128), nullable=False, unique=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
 class PlaidItem(Base):
     __tablename__ = "plaid_items"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     item_id = Column(String(200), unique=True, nullable=False)
     access_token = Column(EncryptedString(700), nullable=False)  # 700 chars to fit Fernet overhead
     institution_id = Column(String(100))
@@ -36,6 +59,7 @@ class PlaidItem(Base):
 class BankAccount(Base):
     __tablename__ = "bank_accounts"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     plaid_item_id = Column(UUID(as_uuid=False), ForeignKey("plaid_items.id", ondelete="CASCADE"), nullable=False)
     account_id = Column(String(200), unique=True, nullable=False)
     name = Column(String(200), nullable=False)
@@ -58,6 +82,7 @@ class BankAccount(Base):
 class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     account_id = Column(UUID(as_uuid=False), ForeignKey("bank_accounts.id", ondelete="CASCADE"), nullable=False)
     plaid_transaction_id = Column(String(200), unique=True)
     amount = Column(Numeric(12, 2), nullable=False)
@@ -82,12 +107,16 @@ class Transaction(Base):
 class BudgetMonth(Base):
     __tablename__ = "budget_months"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     year = Column(Integer, nullable=False)
     month = Column(Integer, nullable=False)
     total_income = Column(Numeric(12, 2), nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    __table_args__ = (CheckConstraint("month >= 1 AND month <= 12", name="ck_budget_month_month"),)
+    __table_args__ = (
+        CheckConstraint("month >= 1 AND month <= 12", name="ck_budget_month_month"),
+        __import__('sqlalchemy').UniqueConstraint("user_id", "year", "month", name="uq_budget_month_user_ym"),
+    )
     groups = relationship("BudgetGroup", back_populates="budget_month", cascade="all, delete-orphan", order_by="BudgetGroup.sort_order")
 
 
@@ -105,6 +134,7 @@ class BudgetGroup(Base):
 class BudgetCategory(Base):
     __tablename__ = "budget_categories"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     group_id = Column(UUID(as_uuid=False), ForeignKey("budget_groups.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), nullable=False)
     budgeted = Column(Numeric(12, 2), nullable=False, default=0)
@@ -126,6 +156,7 @@ class BudgetCategory(Base):
 class DebtAccount(Base):
     __tablename__ = "debt_accounts"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(150), nullable=False)
     balance = Column(Numeric(12, 2), nullable=False)
     original_balance = Column(Numeric(12, 2), nullable=True)  # user-entered; falls back to balance + payments if unset
@@ -171,6 +202,7 @@ class DebtPayment(Base):
 class SavingsGoal(Base):
     __tablename__ = "savings_goals"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(150), nullable=False)
     target_amount = Column(Numeric(12, 2), nullable=False)
     current_amount = Column(Numeric(12, 2), nullable=False, default=0)
@@ -198,7 +230,8 @@ class SavingsContribution(Base):
 class UserSubscription(Base):
     __tablename__ = "user_subscriptions"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    merchant_name = Column(String(300), nullable=False, unique=True)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    merchant_name = Column(String(300), nullable=False)
     status = Column(String(20), nullable=False, default="active")  # active / paused / cancelled
     notes = Column(String(500))
     # Manually-added subscriptions (not derived from detected transaction patterns).
@@ -210,12 +243,16 @@ class UserSubscription(Base):
     next_expected = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        __import__('sqlalchemy').UniqueConstraint("user_id", "merchant_name", name="uq_user_subscription_user_merchant"),
+    )
 
 
 class BillPayment(Base):
     """Tracks whether a recurring bill was paid in a given month."""
     __tablename__ = "bill_payments"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     merchant_name = Column(String(300), nullable=False)
     year = Column(Integer, nullable=False)
     month = Column(Integer, nullable=False)
@@ -226,7 +263,7 @@ class BillPayment(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     __table_args__ = (
         CheckConstraint("month >= 1 AND month <= 12", name="bill_payments_month_check"),
-        __import__('sqlalchemy').UniqueConstraint("merchant_name", "year", "month", name="uq_bill_payment_merchant_month"),
+        __import__('sqlalchemy').UniqueConstraint("user_id", "merchant_name", "year", "month", name="uq_bill_payment_user_merchant_month"),
     )
 
 
@@ -234,6 +271,7 @@ class Paycheck(Base):
     """A recurring income schedule (e.g. biweekly paycheck from an employer)."""
     __tablename__ = "paychecks"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     source = Column(String(150), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     frequency = Column(String(20), nullable=False, default="biweekly")  # weekly / biweekly / semimonthly / monthly
@@ -264,6 +302,7 @@ class PaycheckOccurrenceOverride(Base):
 class NetWorthSnapshot(Base):
     __tablename__ = "net_worth_snapshots"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     year = Column(Integer, nullable=False)
     month = Column(Integer, nullable=False)
     assets = Column(Numeric(14, 2), nullable=False, default=0)
@@ -271,13 +310,14 @@ class NetWorthSnapshot(Base):
     net_worth = Column(Numeric(14, 2), nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     __table_args__ = (
-        __import__('sqlalchemy').UniqueConstraint("year", "month", name="uq_net_worth_snapshot_ym"),
+        __import__('sqlalchemy').UniqueConstraint("user_id", "year", "month", name="uq_net_worth_snapshot_user_ym"),
     )
 
 
 class SpendingAlert(Base):
     __tablename__ = "spending_alerts"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     category_id = Column(UUID(as_uuid=False), ForeignKey("budget_categories.id", ondelete="CASCADE"), nullable=False, unique=True)
     threshold_pct = Column(Integer, nullable=False, default=80)
     enabled = Column(Boolean, nullable=False, default=True)

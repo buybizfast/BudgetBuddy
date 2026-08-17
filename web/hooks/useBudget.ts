@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { authHeaders, clearToken } from '@/lib/auth'
+import { authHeaders, clearToken, getToken } from '@/lib/auth'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const WS_BASE = BASE.replace(/^http/, 'ws')
@@ -60,7 +60,9 @@ export function useBudget(year: number, month: number) {
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout>
     const connect = () => {
-      const ws = new WebSocket(`${WS_BASE}/ws`)
+      const token = getToken()
+      if (!token) return
+      const ws = new WebSocket(`${WS_BASE}/ws?token=${encodeURIComponent(token)}`)
       wsRef.current = ws
       ws.onmessage = (evt) => {
         try {
