@@ -172,14 +172,17 @@ export default function AccountsPage() {
                         </div>
                         <div className="text-right shrink-0 ml-4">
                           <p className={cn('text-sm font-semibold', (acct.type === 'credit' || acct.type === 'loan') ? 'text-red-500' : 'text-gray-900 dark:text-gray-100')}>
-                            {fmt(acct.current_balance)}
+                            {/* For checking/savings, "available" is the live number the
+                                bank app shows (current lags behind pending activity) —
+                                make it the primary figure. */}
+                            {fmt(acct.type === 'depository' && acct.available_balance !== null ? acct.available_balance : acct.current_balance)}
                           </p>
                           {acct.type === 'credit' && acct.credit_limit ? (
                             <p className={cn('text-xs font-medium', utilizationColor((acct.current_balance / acct.credit_limit) * 100))}>
                               {((acct.current_balance / acct.credit_limit) * 100).toFixed(0)}% of {fmt(acct.credit_limit)}
                             </p>
                           ) : acct.available_balance !== null && acct.available_balance !== acct.current_balance && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500">{fmt(acct.available_balance)} avail.</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500">{fmt(acct.current_balance)} current</p>
                           )}
                         </div>
                       </div>

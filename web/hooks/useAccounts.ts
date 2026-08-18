@@ -41,7 +41,17 @@ export function useAccounts() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    // Show stored balances immediately, then kick off a live Plaid sync in
+    // the background and re-render with fresh numbers once it completes —
+    // so opening the page always converges on up-to-date balances without
+    // the user pressing Sync.
+    refresh().then(() =>
+      fetch(`${BASE}/api/v1/plaid/sync-all`, { method: 'POST', headers: { ...authHeaders() } })
+        .then(() => refresh())
+        .catch(() => {})
+    )
+  }, [refresh])
 
   const syncAll = async () => {
     await fetch(`${BASE}/api/v1/plaid/sync-all`, { method: 'POST', headers: { ...authHeaders() } })
