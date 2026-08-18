@@ -22,7 +22,6 @@ try:
     from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
     from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
     from plaid.model.transactions_sync_request import TransactionsSyncRequest
-    from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
     from plaid.model.products import Products
     _PLAID_AVAILABLE = True
     _ENV_MAP = {
@@ -35,6 +34,13 @@ try:
 except ImportError:
     _PLAID_AVAILABLE = False
     _ENV_MAP = {}
+
+try:
+    # Imported separately so an SDK version without this request model can't
+    # take down all of Plaid support via the ImportError handler above.
+    from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
+except ImportError:
+    AccountsBalanceGetRequest = None
     log.warning("plaid-python not installed — bank sync disabled.")
 
 
@@ -119,11 +125,22 @@ def _plaid_str(v: Any, default: str | None = None) -> str | None:
 
 
 async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> None:
+    from plaid.model.accounts_get_request import AccountsGetRequest
     from backend.services.debt_service import sync_debt_from_plaid_account
     # /accounts/balance/get forces Plaid to pull a fresh balance from the
-    # institution — /accounts/get (used previously) returns Plaid's cached
-    # balance, which can sit stale at whatever it was on first link/sync.
-    response = client.accounts_balance_get(AccountsBalanceGetRequest(access_token=plaid_item.access_token))
+    # institution — /accounts/get returns Plaid's cached balance, which can
+    # sit stale at whatever it was on first link/sync. Prefer the live pull,
+    # but a live pull can surface a stale bank login (ITEM_LOGIN_REQUIRED)
+    # that the cached call would never hit — fall back rather than let a
+    # balance refresh failure kill the whole sync and force a reconnect.
+    response = None
+    if AccountsBalanceGetRequest is not None:
+        try:
+            response = client.accounts_balance_get(AccountsBalanceGetRequest(access_token=plaid_item.access_token))
+        except Exception as exc:
+            log.warning("Live balance pull failed for item %s, falling back to cached balances: %s", plaid_item.id, exc)
+    if response is None:
+        response = client.accounts_get(AccountsGetRequest(access_token=plaid_item.access_token))
     for acct in response["accounts"]:
         result = await db.execute(select(BankAccount).where(BankAccount.account_id == acct["account_id"]))
         existing = result.scalar_one_or_none()
