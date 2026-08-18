@@ -1,7 +1,6 @@
 'use client'
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { PiggyBank } from 'lucide-react'
 import { setToken } from '@/lib/auth'
 
@@ -9,7 +8,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -22,11 +21,10 @@ export default function LoginPage() {
       const res = await fetch(`${BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setError(err.detail || 'Invalid email or password')
+        setError('Invalid username or password')
         return
       }
       const { access_token } = await res.json()
@@ -58,24 +56,21 @@ export default function LoginPage() {
           )}
 
           <div className="space-y-1">
-            <label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+            <label htmlFor="username" className="text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
             <input
-              id="email"
-              type="email"
+              id="username"
+              type="text"
               autoComplete="username"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              value={username}
+              onChange={e => setUsername(e.target.value)}
               required
               className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@example.com"
+              placeholder="admin"
             />
           </div>
 
           <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-              <Link href="/forgot-password" className="text-xs text-blue-600 hover:text-blue-700 font-medium">Forgot password?</Link>
-            </div>
+            <label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
             <input
               id="password"
               type="password"
@@ -95,11 +90,6 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
-
-          <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-            Don't have an account?{' '}
-            <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">Sign up</Link>
-          </p>
         </form>
       </div>
     </div>

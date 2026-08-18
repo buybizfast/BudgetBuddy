@@ -105,7 +105,7 @@ async def auto_assign(txn: Transaction, db: AsyncSession) -> bool:
         return False
 
     result = await db.execute(
-        select(BudgetMonth).where(BudgetMonth.user_id == txn.user_id, BudgetMonth.year == txn.date.year, BudgetMonth.month == txn.date.month)
+        select(BudgetMonth).where(BudgetMonth.year == txn.date.year, BudgetMonth.month == txn.date.month)
     )
     bm = result.scalar_one_or_none()
     if not bm:
@@ -125,12 +125,12 @@ async def auto_assign(txn: Transaction, db: AsyncSession) -> bool:
     return False
 
 
-async def auto_assign_all_unassigned(user_id: str, year: int, month: int, db: AsyncSession) -> int:
+async def auto_assign_all_unassigned(year: int, month: int, db: AsyncSession) -> int:
     start = date(year, month, 1)
     end = date(year, month, calendar.monthrange(year, month)[1])
     result = await db.execute(
         select(Transaction).where(
-            Transaction.user_id == user_id, Transaction.date >= start, Transaction.date <= end,
+            Transaction.date >= start, Transaction.date <= end,
             Transaction.budget_category_id == None, Transaction.amount > 0,
         )
     )

@@ -9,18 +9,17 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import BankAccount, DebtAccount, NetWorthSnapshot, SavingsGoal
 
 router = APIRouter(prefix="/api/v1/networth", tags=["networth"])
 
 
-async def _current_snapshot(user_id: str, db: AsyncSession) -> dict:
+async def _current_snapshot(db: AsyncSession) -> dict:
     """Compute current net worth from live balances."""
-    accounts = (await db.execute(select(BankAccount).where(BankAccount.user_id == user_id, BankAccount.is_active == True))).scalars().all()
-    debts = (await db.execute(select(DebtAccount).where(DebtAccount.user_id == user_id, DebtAccount.is_paid_off == False))).scalars().all()
-    goals = (await db.execute(select(SavingsGoal).where(SavingsGoal.user_id == user_id, SavingsGoal.is_completed == False))).scalars().all()
+    accounts = (await db.execute(select(BankAccount).where(BankAccount.is_active == True))).scalars().all()
+    debts = (await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False))).scalars().all()
+    goals = (await db.execute(select(SavingsGoal).where(SavingsGoal.is_completed == False))).scalars().all()
 
     # Credit/loan accounts' current_balance represents what's owed, not an
     # asset — they're already counted in `liabilities` via DebtAccount below.
@@ -34,8 +33,8 @@ async def _current_snapshot(user_id: str, db: AsyncSession) -> dict:
 
 
 @router.get("/current")
-async def get_current(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    snap = await _current_snapshot(user_id, db)
+async def get_current(db: AsyncSession = Depends(get_session)):
+    snap = await _current_snapshot(db)
     now = datetime.utcnow()
     snap["year"] = now.year
     snap["month"] = now.month
@@ -43,9 +42,9 @@ async def get_current(user_id: str = Depends(get_current_user), db: AsyncSession
 
 
 @router.get("/history")
-async def get_history(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def get_history(db: AsyncSession = Depends(get_session)):
     result = await db.execute(
-        select(NetWorthSnapshot).where(NetWorthSnapshot.user_id == user_id).order_by(NetWorthSnapshot.year, NetWorthSnapshot.month)
+        select(NetWorthSnapshot).order_by(NetWorthSnapshot.year, NetWorthSnapshot.month)
     )
     snapshots = result.scalars().all()
     return [
@@ -59,14 +58,14 @@ async def get_history(user_id: str = Depends(get_current_user), db: AsyncSession
 
 
 @router.post("/snapshot")
-async def save_snapshot(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def save_snapshot(db: AsyncSession = Depends(get_session)):
     """Save current net worth as this month's snapshot."""
-    snap = await _current_snapshot(user_id, db)
+    snap = await _current_snapshot(db)
     now = datetime.utcnow()
     year, month = now.year, now.month
 
     result = await db.execute(
-        select(NetWorthSnapshot).where(NetWorthSnapshot.user_id == user_id, NetWorthSnapshot.year == year, NetWorthSnapshot.month == month)
+        select(NetWorthSnapshot).where(NetWorthSnapshot.year == year, NetWorthSnapshot.month == month)
     )
     existing = result.scalar_one_or_none()
     if existing:
@@ -74,6 +73,6 @@ async def save_snapshot(user_id: str = Depends(get_current_user), db: AsyncSessi
         existing.liabilities = snap["liabilities"]
         existing.net_worth = snap["net_worth"]
     else:
-        db.add(NetWorthSnapshot(user_id=user_id, year=year, month=month, **snap))
+        db.add(NetWorthSnapshot(year=year, month=month, **snap))
     await db.commit()
     return {**snap, "year": year, "month": month}

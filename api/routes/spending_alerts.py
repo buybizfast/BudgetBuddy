@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import BudgetCategory, BudgetGroup, BudgetMonth, SpendingAlert, Transaction
 
@@ -29,21 +28,18 @@ class AlertUpdate(BaseModel):
 
 
 @router.get("/")
-async def list_alerts(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(SpendingAlert).where(SpendingAlert.user_id == user_id))
+async def list_alerts(db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(SpendingAlert))
     alerts = result.scalars().all()
     return [{"id": str(a.id), "category_id": str(a.category_id), "threshold_pct": a.threshold_pct, "enabled": a.enabled} for a in alerts]
 
 
 @router.post("/")
-async def create_alert(body: AlertCreate, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    cat_result = await db.execute(select(BudgetCategory).where(BudgetCategory.id == body.category_id, BudgetCategory.user_id == user_id))
-    if cat_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Category not found")
-    existing = await db.execute(select(SpendingAlert).where(SpendingAlert.category_id == body.category_id, SpendingAlert.user_id == user_id))
+async def create_alert(body: AlertCreate, db: AsyncSession = Depends(get_session)):
+    existing = await db.execute(select(SpendingAlert).where(SpendingAlert.category_id == body.category_id))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Alert already exists for this category")
-    alert = SpendingAlert(user_id=user_id, category_id=body.category_id, threshold_pct=body.threshold_pct, enabled=body.enabled)
+    alert = SpendingAlert(category_id=body.category_id, threshold_pct=body.threshold_pct, enabled=body.enabled)
     db.add(alert)
     await db.commit()
     await db.refresh(alert)
@@ -51,8 +47,8 @@ async def create_alert(body: AlertCreate, user_id: str = Depends(get_current_use
 
 
 @router.patch("/{alert_id}")
-async def update_alert(alert_id: str, body: AlertUpdate, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(SpendingAlert).where(SpendingAlert.id == alert_id, SpendingAlert.user_id == user_id))
+async def update_alert(alert_id: str, body: AlertUpdate, db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(SpendingAlert).where(SpendingAlert.id == alert_id))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -66,8 +62,8 @@ async def update_alert(alert_id: str, body: AlertUpdate, user_id: str = Depends(
 
 
 @router.delete("/{alert_id}")
-async def delete_alert(alert_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(SpendingAlert).where(SpendingAlert.id == alert_id, SpendingAlert.user_id == user_id))
+async def delete_alert(alert_id: str, db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(SpendingAlert).where(SpendingAlert.id == alert_id))
     alert = result.scalar_one_or_none()
     if alert:
         await db.delete(alert)
@@ -76,17 +72,17 @@ async def delete_alert(alert_id: str, user_id: str = Depends(get_current_user), 
 
 
 @router.get("/check/{year}/{month}")
-async def check_alerts(year: int, month: int, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def check_alerts(year: int, month: int, db: AsyncSession = Depends(get_session)):
     """Return all enabled alerts with their current pct_used and whether they're triggered."""
     # Load all enabled alerts
-    result = await db.execute(select(SpendingAlert).where(SpendingAlert.user_id == user_id, SpendingAlert.enabled == True))
+    result = await db.execute(select(SpendingAlert).where(SpendingAlert.enabled == True))
     alerts = result.scalars().all()
     if not alerts:
         return []
 
     # Load budget month
     bm_result = await db.execute(
-        select(BudgetMonth).where(BudgetMonth.user_id == user_id, BudgetMonth.year == year, BudgetMonth.month == month)
+        select(BudgetMonth).where(BudgetMonth.year == year, BudgetMonth.month == month)
     )
     bm = bm_result.scalar_one_or_none()
     if not bm:
@@ -94,7 +90,7 @@ async def check_alerts(year: int, month: int, user_id: str = Depends(get_current
 
     # Build category_id → (name, budgeted) map
     cat_ids = [str(a.category_id) for a in alerts]
-    cats_result = await db.execute(select(BudgetCategory).where(BudgetCategory.id.in_(cat_ids), BudgetCategory.user_id == user_id))
+    cats_result = await db.execute(select(BudgetCategory).where(BudgetCategory.id.in_(cat_ids)))
     cats = {str(c.id): c for c in cats_result.scalars().all()}
 
     # Sum spending per category for the month
@@ -105,7 +101,6 @@ async def check_alerts(year: int, month: int, user_id: str = Depends(get_current
 
     spent_result = await db.execute(
         select(Transaction.budget_category_id, Transaction.amount).where(
-            Transaction.user_id == user_id,
             Transaction.budget_category_id.in_(cat_ids),
             Transaction.date >= first_day,
             Transaction.date <= last_day,

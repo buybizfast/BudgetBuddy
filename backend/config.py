@@ -40,14 +40,3 @@ JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "10080"))  # 7 days
 # Plaid token encryption — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 # If not set, tokens are stored unencrypted (development only).
 TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY", "")
-
-# Transactional email (signup verification, password reset) via Resend.
-# Get a key at https://resend.com/api-keys. RESEND_FROM_EMAIL must be on a
-# domain you've verified with Resend (or use their onboarding@resend.dev
-# sender for testing only). If RESEND_API_KEY is unset, emails are logged
-# instead of sent — fine for local dev, not for production.
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "BudgetBuddy <onboarding@resend.dev>")
-# Used to build links in emails (password reset, etc.) — set this to your
-# deployed frontend URL, e.g. https://budget-buddy-tau-gilt.vercel.app
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")

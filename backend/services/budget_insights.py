@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.services.budget_service import get_budget_month_with_spending
 
 
-async def generate_insights(user_id: str, year: int, month: int, db: AsyncSession) -> str:
-    budget = await get_budget_month_with_spending(user_id, year, month, db)
+async def generate_insights(year: int, month: int, db: AsyncSession) -> str:
+    budget = await get_budget_month_with_spending(year, month, db)
 
     from backend.config import ANTHROPIC_API_KEY
     if not ANTHROPIC_API_KEY:

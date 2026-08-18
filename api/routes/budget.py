@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import BankAccount, BudgetCategory, BudgetGroup, BudgetMonth, PlaidItem, Transaction
 from backend.services import budget_service, budget_insights
@@ -19,18 +18,18 @@ router = APIRouter(prefix="/api/v1/budget", tags=["budget"])
 
 
 @router.get("/month/{year}/{month}")
-async def get_budget_month(year: int, month: int, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def get_budget_month(year: int, month: int, db: AsyncSession = Depends(get_session)):
     if not (1 <= month <= 12):
         raise HTTPException(status_code=400, detail="Month must be 1-12")
-    return await budget_service.get_budget_month_with_spending(user_id, year, month, db)
+    return await budget_service.get_budget_month_with_spending(year, month, db)
 
 
 class UpdateIncomeRequest(BaseModel):
     income: float
 
 @router.patch("/month/{budget_month_id}/income")
-async def update_income(budget_month_id: str, body: UpdateIncomeRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    await budget_service.update_budget_income(user_id, budget_month_id, body.income, db)
+async def update_income(budget_month_id: str, body: UpdateIncomeRequest, db: AsyncSession = Depends(get_session)):
+    await budget_service.update_budget_income(budget_month_id, body.income, db)
     return {"status": "ok"}
 
 
@@ -38,8 +37,8 @@ class ReorderGroupsRequest(BaseModel):
     group_ids: list[str]
 
 @router.patch("/month/{budget_month_id}/groups/reorder")
-async def reorder_groups(budget_month_id: str, body: ReorderGroupsRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    await budget_service.reorder_groups(user_id, budget_month_id, body.group_ids, db)
+async def reorder_groups(budget_month_id: str, body: ReorderGroupsRequest, db: AsyncSession = Depends(get_session)):
+    await budget_service.reorder_groups(budget_month_id, body.group_ids, db)
     return {"status": "ok"}
 
 
@@ -49,25 +48,25 @@ class UpdateCategoryRequest(BaseModel):
     cost_type: Optional[str] = None
 
 @router.patch("/categories/{category_id}")
-async def update_category(category_id: str, body: UpdateCategoryRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def update_category(category_id: str, body: UpdateCategoryRequest, db: AsyncSession = Depends(get_session)):
     if body.cost_type is not None and body.cost_type not in ("fixed", "variable"):
         raise HTTPException(status_code=400, detail="cost_type must be 'fixed' or 'variable'")
     try:
         if body.budgeted is not None:
-            await budget_service.update_category_budget(user_id, category_id, body.budgeted, db)
+            await budget_service.update_category_budget(category_id, body.budgeted, db)
         if body.name is not None:
-            await budget_service.rename_category(user_id, category_id, body.name, db)
+            await budget_service.rename_category(category_id, body.name, db)
         if body.cost_type is not None:
-            await budget_service.update_category_cost_type(user_id, category_id, body.cost_type, db)
+            await budget_service.update_category_cost_type(category_id, body.cost_type, db)
     except Exception:
         raise HTTPException(status_code=404, detail="Category not found")
     return {"status": "ok"}
 
 
 @router.delete("/categories/{category_id}")
-async def delete_category(category_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def delete_category(category_id: str, db: AsyncSession = Depends(get_session)):
     try:
-        await budget_service.delete_budget_category(user_id, category_id, db)
+        await budget_service.delete_budget_category(category_id, db)
     except Exception:
         raise HTTPException(status_code=404, detail="Category not found")
     return {"status": "ok"}
@@ -77,8 +76,8 @@ class AddCategoryRequest(BaseModel):
     name: str
 
 @router.post("/groups/{group_id}/categories")
-async def add_category(group_id: str, body: AddCategoryRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    cat = await budget_service.add_budget_category(user_id, group_id, body.name, db)
+async def add_category(group_id: str, body: AddCategoryRequest, db: AsyncSession = Depends(get_session)):
+    cat = await budget_service.add_budget_category(group_id, body.name, db)
     return {"id": str(cat.id), "name": cat.name, "budgeted": 0, "sort_order": cat.sort_order}
 
 
@@ -86,8 +85,8 @@ class ReorderCategoriesRequest(BaseModel):
     category_ids: list[str]
 
 @router.patch("/groups/{group_id}/categories/reorder")
-async def reorder_categories(group_id: str, body: ReorderCategoriesRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    await budget_service.reorder_categories(user_id, group_id, body.category_ids, db)
+async def reorder_categories(group_id: str, body: ReorderCategoriesRequest, db: AsyncSession = Depends(get_session)):
+    await budget_service.reorder_categories(group_id, body.category_ids, db)
     return {"status": "ok"}
 
 
@@ -101,12 +100,13 @@ def _is_bnpl_transaction(personal_finance_category: Optional[str]) -> bool:
 async def list_transactions(year: int = Query(...), month: int = Query(...),
                              account_id: Optional[str] = None, category_id: Optional[str] = None,
                              unassigned: bool = False, limit: int = Query(default=10000, le=10000),
-                             offset: int = 0, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+                             offset: int = 0, db: AsyncSession = Depends(get_session)):
+    from backend.db.models import BankAccount
     start_date = date(year, month, 1)
     end_date = date(year, month, calendar.monthrange(year, month)[1])
     q = (select(Transaction, BankAccount.name.label("account_name"))
          .join(BankAccount, Transaction.account_id == BankAccount.id)
-         .where(Transaction.user_id == user_id, Transaction.date >= start_date, Transaction.date <= end_date)
+         .where(Transaction.date >= start_date, Transaction.date <= end_date)
          .order_by(Transaction.date.desc(), Transaction.created_at.desc()))
     if account_id:
         q = q.where(Transaction.account_id == account_id)
@@ -129,8 +129,8 @@ class AssignCategoryRequest(BaseModel):
     budget_category_id: Optional[str] = None
 
 @router.patch("/transactions/{transaction_id}/category")
-async def assign_transaction_category(transaction_id: str, body: AssignCategoryRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    await budget_service.assign_transaction_to_category(user_id, transaction_id, body.budget_category_id, db)
+async def assign_transaction_category(transaction_id: str, body: AssignCategoryRequest, db: AsyncSession = Depends(get_session)):
+    await budget_service.assign_transaction_to_category(transaction_id, body.budget_category_id, db)
     return {"status": "ok"}
 
 
@@ -142,24 +142,23 @@ class CreateTransactionRequest(BaseModel):
     notes: Optional[str] = None
 
 
-async def _get_or_create_cash_account(user_id: str, db: AsyncSession) -> str:
-    """Return the id of this user's manual/cash account, creating it if needed."""
-    result = await db.execute(select(BankAccount).where(BankAccount.account_id == f"manual-cash-{user_id}"))
+async def _get_or_create_cash_account(db: AsyncSession) -> str:
+    """Return the id of the manual/cash account, creating it if needed."""
+    result = await db.execute(select(BankAccount).where(BankAccount.account_id == "manual-cash"))
     acct = result.scalar_one_or_none()
     if acct:
         return str(acct.id)
 
-    # Need a PlaidItem as FK — get or create this user's manual one
-    manual_item_id = f"manual-{user_id}"
-    pi_result = await db.execute(select(PlaidItem).where(PlaidItem.item_id == manual_item_id))
+    # Need a PlaidItem as FK — get or create a manual one
+    pi_result = await db.execute(select(PlaidItem).where(PlaidItem.item_id == "manual"))
     pi = pi_result.scalar_one_or_none()
     if not pi:
-        pi = PlaidItem(user_id=user_id, item_id=manual_item_id, access_token="manual", institution_id="manual",
+        pi = PlaidItem(item_id="manual", access_token="manual", institution_id="manual",
                        institution_name="Manual", status="active")
         db.add(pi)
         await db.flush()
 
-    acct = BankAccount(user_id=user_id, plaid_item_id=str(pi.id), account_id=f"manual-cash-{user_id}", name="Cash / Manual",
+    acct = BankAccount(plaid_item_id=str(pi.id), account_id="manual-cash", name="Cash / Manual",
                        type="depository", subtype="cash", current_balance=0, institution_name="Manual")
     db.add(acct)
     await db.flush()
@@ -167,10 +166,9 @@ async def _get_or_create_cash_account(user_id: str, db: AsyncSession) -> str:
 
 
 @router.post("/transactions")
-async def create_transaction(body: CreateTransactionRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    account_id = await _get_or_create_cash_account(user_id, db)
+async def create_transaction(body: CreateTransactionRequest, db: AsyncSession = Depends(get_session)):
+    account_id = await _get_or_create_cash_account(db)
     txn = Transaction(
-        user_id=user_id,
         account_id=account_id,
         name=body.name,
         merchant_name=body.name,
@@ -187,8 +185,8 @@ async def create_transaction(body: CreateTransactionRequest, user_id: str = Depe
 
 
 @router.delete("/transactions/{transaction_id}")
-async def delete_transaction(transaction_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.user_id == user_id))
+async def delete_transaction(transaction_id: str, db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id))
     txn = result.scalar_one_or_none()
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -200,52 +198,48 @@ async def delete_transaction(transaction_id: str, user_id: str = Depends(get_cur
 
 
 @router.get("/insights/{year}/{month}")
-async def get_insights(year: int, month: int, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    insights = await budget_insights.generate_insights(user_id, year, month, db)
+async def get_insights(year: int, month: int, db: AsyncSession = Depends(get_session)):
+    insights = await budget_insights.generate_insights(year, month, db)
     return {"insights": insights, "year": year, "month": month}
 
 
-_sync_state: dict[str, dict] = {}
-
-def _sync_state_for(user_id: str) -> dict:
-    return _sync_state.setdefault(user_id, {"last_synced_at": None, "last_added": 0, "syncing": False})
+_sync_state: dict = {"last_synced_at": None, "last_added": 0, "syncing": False}
 
 @router.get("/sync-status")
-async def get_sync_status(user_id: str = Depends(get_current_user)):
-    return _sync_state_for(user_id)
+async def get_sync_status():
+    return _sync_state
 
 @router.post("/sync-now")
-async def sync_now(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def sync_now(db: AsyncSession = Depends(get_session)):
     from backend.services.plaid_service import refresh_all_items
     from api.ws_manager import ws_manager
     from datetime import datetime, timezone
-    state = _sync_state_for(user_id)
-    state["syncing"] = True
+    _sync_state["syncing"] = True
     try:
-        summary = await refresh_all_items(db, user_id)
-        state["last_synced_at"] = datetime.now(timezone.utc).isoformat()
-        state["last_added"] = summary["total_added"]
-        state["syncing"] = False
+        summary = await refresh_all_items(db)
+        _sync_state["last_synced_at"] = datetime.now(timezone.utc).isoformat()
+        _sync_state["last_added"] = summary["total_added"]
+        _sync_state["syncing"] = False
         if summary["total_added"] > 0:
-            await ws_manager.broadcast_budget_update(summary["total_added"], summary["new_transactions"], user_id)
+            await ws_manager.broadcast_budget_update(summary["total_added"], summary["new_transactions"])
         return {"synced": summary["total_added"], "new_transactions": summary["new_transactions"]}
     except Exception as exc:
-        state["syncing"] = False
+        _sync_state["syncing"] = False
         raise HTTPException(status_code=500, detail=str(exc))
 
 @router.post("/auto-categorize/{year}/{month}")
-async def run_auto_categorize(year: int, month: int, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def run_auto_categorize(year: int, month: int, db: AsyncSession = Depends(get_session)):
     from backend.services.auto_categorizer import auto_assign_all_unassigned
-    count = await auto_assign_all_unassigned(user_id, year, month, db)
+    count = await auto_assign_all_unassigned(year, month, db)
     return {"assigned": count}
 
 @router.post("/month/{year}/{month}/copy-previous")
-async def copy_previous_month(year: int, month: int, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def copy_previous_month(year: int, month: int, db: AsyncSession = Depends(get_session)):
     if not (1 <= month <= 12):
         raise HTTPException(status_code=400, detail="Month must be 1-12")
-    return await budget_service.copy_from_previous_month(user_id, year, month, db)
+    return await budget_service.copy_from_previous_month(year, month, db)
 
 @router.get("/recurring")
-async def detect_recurring_transactions(months_back: int = Query(default=6, ge=1, le=24), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def detect_recurring_transactions(months_back: int = Query(default=6, ge=1, le=24), db: AsyncSession = Depends(get_session)):
     from backend.services.recurring_service import detect_recurring
-    return await detect_recurring(user_id, db, months_back)
+    return await detect_recurring(db, months_back)

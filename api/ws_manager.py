@@ -1,9 +1,7 @@
-"""WebSocket connection manager for live budget updates — connections are
-scoped per user_id so one account's updates never reach another's browser."""
+"""WebSocket connection manager for live budget updates."""
 from __future__ import annotations
 
 import json
-from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -12,29 +10,29 @@ from fastapi import WebSocket
 
 class ConnectionManager:
     def __init__(self):
-        self.active: dict[str, list[WebSocket]] = defaultdict(list)
+        self.active: list[WebSocket] = []
 
-    async def connect(self, ws: WebSocket, user_id: str):
+    async def connect(self, ws: WebSocket):
         await ws.accept()
-        self.active[user_id].append(ws)
+        self.active.append(ws)
 
-    def disconnect(self, ws: WebSocket, user_id: str):
-        if ws in self.active.get(user_id, []):
-            self.active[user_id].remove(ws)
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
 
-    async def broadcast(self, user_id: str, event_type: str, data: dict[str, Any]):
+    async def broadcast(self, event_type: str, data: dict[str, Any]):
         msg = json.dumps({"type": event_type, "data": data})
         dead = []
-        for ws in self.active.get(user_id, []):
+        for ws in self.active:
             try:
                 await ws.send_text(msg)
             except Exception:
                 dead.append(ws)
         for ws in dead:
-            self.disconnect(ws, user_id)
+            self.disconnect(ws)
 
-    async def broadcast_budget_update(self, added: int, new_transactions: list, user_id: str):
-        await self.broadcast(user_id, "budget.update", {
+    async def broadcast_budget_update(self, added: int, new_transactions: list):
+        await self.broadcast("budget.update", {
             "added": added,
             "new_transactions": new_transactions[:10],
             "synced_at": datetime.utcnow().isoformat() + "Z",

@@ -40,9 +40,9 @@ def _estimate_payoff(balance: float, annual_rate_pct: float, minimum_payment: fl
     return {"months": months, "date": date(payoff_year, payoff_month, 1).isoformat()}
 
 
-async def list_debts(user_id: str, db: AsyncSession) -> list[dict[str, Any]]:
+async def list_debts(db: AsyncSession) -> list[dict[str, Any]]:
     result = await db.execute(
-        select(DebtAccount).where(DebtAccount.user_id == user_id, DebtAccount.dismissed == False)  # noqa: E712
+        select(DebtAccount).where(DebtAccount.dismissed == False)  # noqa: E712
         .options(selectinload(DebtAccount.payments))
         .order_by(DebtAccount.balance, DebtAccount.created_at)
     )
@@ -89,7 +89,7 @@ _PLAID_SUBTYPE_TO_DEBT_TYPE = {
 
 
 async def sync_debt_from_plaid_account(
-    bank_account_id: str, user_id: str, name: str, balance: float, plaid_type: str,
+    bank_account_id: str, name: str, balance: float, plaid_type: str,
     plaid_subtype: Optional[str], db: AsyncSession,
 ) -> None:
     """Auto-create (or keep in sync) a DebtAccount for a linked Plaid credit-card
@@ -103,11 +103,11 @@ async def sync_debt_from_plaid_account(
     if debt is None:
         default_type = "credit_card" if plaid_type == "credit" else "loan"
         account_type = _PLAID_SUBTYPE_TO_DEBT_TYPE.get(plaid_subtype or "", default_type)
-        result = await db.execute(select(DebtAccount).where(DebtAccount.user_id == user_id).order_by(DebtAccount.sort_order.desc()).limit(1))
+        result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
         last = result.scalar_one_or_none()
         sort_order = (last.sort_order + 1) if last else 0
         db.add(DebtAccount(
-            user_id=user_id, name=name, balance=Decimal(str(clamped_balance)), account_type=account_type,
+            name=name, balance=Decimal(str(clamped_balance)), account_type=account_type,
             bank_account_id=bank_account_id, sort_order=sort_order, is_paid_off=clamped_balance <= 0,
         ))
         log.info("Auto-created debt account %r (type=%s, balance=%s) from bank_account_id=%s",
@@ -147,15 +147,15 @@ async def apply_liability_snapshot(
 
 
 async def create_debt(
-    user_id: str, name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession,
+    name: str, balance: float, minimum_payment: float, interest_rate: float, db: AsyncSession,
     account_type: str = "loan", due_date_day: Optional[int] = None, statement_date_day: Optional[int] = None,
     total_installments: Optional[int] = None, original_balance: Optional[float] = None,
     credit_limit: Optional[float] = None,
 ) -> dict[str, Any]:
-    result = await db.execute(select(DebtAccount).where(DebtAccount.user_id == user_id).order_by(DebtAccount.sort_order.desc()).limit(1))
+    result = await db.execute(select(DebtAccount).order_by(DebtAccount.sort_order.desc()).limit(1))
     last = result.scalar_one_or_none()
     sort_order = (last.sort_order + 1) if last else 0
-    debt = DebtAccount(user_id=user_id, name=name, balance=Decimal(str(balance)), minimum_payment=Decimal(str(minimum_payment)),
+    debt = DebtAccount(name=name, balance=Decimal(str(balance)), minimum_payment=Decimal(str(minimum_payment)),
                        interest_rate=Decimal(str(interest_rate)), sort_order=sort_order,
                        account_type=account_type, due_date_day=due_date_day, statement_date_day=statement_date_day,
                        total_installments=total_installments,
@@ -168,11 +168,11 @@ async def create_debt(
 
 
 async def update_debt(
-    debt_id: str, user_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession,
+    debt_id: str, name, balance, minimum_payment, interest_rate, db: AsyncSession,
     account_type=None, due_date_day=None, statement_date_day=None,
     total_installments=None, installments_paid=None, original_balance=None, credit_limit=None,
 ) -> dict[str, Any]:
-    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id, DebtAccount.user_id == user_id))
+    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
     debt = result.scalar_one()
     if name is not None: debt.name = name
     if balance is not None: debt.balance = Decimal(str(balance))
@@ -190,8 +190,8 @@ async def update_debt(
     return _serialize(debt)
 
 
-async def delete_debt(debt_id: str, user_id: str, db: AsyncSession) -> None:
-    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id, DebtAccount.user_id == user_id))
+async def delete_debt(debt_id: str, db: AsyncSession) -> None:
+    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
     debt = result.scalar_one()
     if debt.bank_account_id:
         # Auto-created from a linked Plaid account — hide it instead of a hard
@@ -202,8 +202,8 @@ async def delete_debt(debt_id: str, user_id: str, db: AsyncSession) -> None:
     await db.commit()
 
 
-async def add_payment(debt_id: str, user_id: str, amount: float, paid_on: date, note: str | None, db: AsyncSession) -> dict[str, Any]:
-    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id, DebtAccount.user_id == user_id))
+async def add_payment(debt_id: str, amount: float, paid_on: date, note: str | None, db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(select(DebtAccount).where(DebtAccount.id == debt_id))
     debt = result.scalar_one()
     payment = DebtPayment(debt_id=debt_id, amount=Decimal(str(amount)), paid_on=paid_on, note=note)
     db.add(payment)
@@ -218,7 +218,7 @@ async def add_payment(debt_id: str, user_id: str, amount: float, paid_on: date, 
     return {"id": str(payment.id), "amount": amount, "paid_on": paid_on.isoformat(), "note": note}
 
 
-async def get_debt_budget_extras(user_id: str, db: AsyncSession) -> dict[str, float]:
+async def get_debt_budget_extras(db: AsyncSession) -> dict[str, float]:
     """Amounts budgeted above each debt's minimum payment this calendar month,
     read from the Debt group's auto-synced budget categories (see
     budget_service._sync_debt_categories, which never overwrites a category's
@@ -228,7 +228,7 @@ async def get_debt_budget_extras(user_id: str, db: AsyncSession) -> dict[str, fl
     just viewing the payoff plan."""
     today = date.today()
     result = await db.execute(
-        select(BudgetMonth).where(BudgetMonth.user_id == user_id, BudgetMonth.year == today.year, BudgetMonth.month == today.month)
+        select(BudgetMonth).where(BudgetMonth.year == today.year, BudgetMonth.month == today.month)
     )
     bm = result.scalar_one_or_none()
     if not bm:
@@ -254,13 +254,13 @@ def _month_offset_date(months: int) -> str:
     return date(year, month, 1).isoformat()
 
 
-async def compute_payoff_plan(user_id: str, extra_monthly: float, strategy: str, db: AsyncSession) -> dict[str, Any]:
-    result = await db.execute(select(DebtAccount).where(DebtAccount.user_id == user_id, DebtAccount.is_paid_off == False).order_by(DebtAccount.sort_order))
+async def compute_payoff_plan(extra_monthly: float, strategy: str, db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False).order_by(DebtAccount.sort_order))
     debts = list(result.scalars().all())
     if not debts:
         return {"debts": [], "total_months": 0, "total_interest": 0.0, "strategy": strategy,
                 "total_budgeted_extra": 0.0, "schedule": []}
-    budget_extras = await get_debt_budget_extras(user_id, db)
+    budget_extras = await get_debt_budget_extras(db)
     ordered = sorted(debts, key=lambda d: float(d.balance)) if strategy == "snowball" else sorted(debts, key=lambda d: float(d.interest_rate), reverse=True)
     balances = {d.id: float(d.balance) for d in ordered}
     rates = {d.id: float(d.interest_rate) / 100 / 12 for d in ordered}
@@ -322,11 +322,11 @@ async def compute_payoff_plan(user_id: str, extra_monthly: float, strategy: str,
             "total_budgeted_extra": round(sum(budget_extras.values()), 2), "schedule": schedule}
 
 
-async def compute_payoff_comparison(user_id: str, extra_monthly: float, db: AsyncSession) -> dict[str, Any]:
+async def compute_payoff_comparison(extra_monthly: float, db: AsyncSession) -> dict[str, Any]:
     """Both strategies computed together so the graph can plot them side by
     side for comparison, sharing the same budgeted-extras snapshot."""
-    snowball = await compute_payoff_plan(user_id, extra_monthly, "snowball", db)
-    avalanche = await compute_payoff_plan(user_id, extra_monthly, "avalanche", db)
+    snowball = await compute_payoff_plan(extra_monthly, "snowball", db)
+    avalanche = await compute_payoff_plan(extra_monthly, "avalanche", db)
     return {"snowball": snowball, "avalanche": avalanche}
 
 

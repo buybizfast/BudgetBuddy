@@ -30,10 +30,10 @@ def _detect_cadence(gaps: list[int]):
     return None
 
 
-async def detect_recurring(user_id: str, db: AsyncSession, months_back: int = 6) -> list[dict[str, Any]]:
+async def detect_recurring(db: AsyncSession, months_back: int = 6) -> list[dict[str, Any]]:
     cutoff = date.today() - timedelta(days=months_back * 30)
     result = await db.execute(
-        select(Transaction).where(Transaction.user_id == user_id, Transaction.date >= cutoff, Transaction.pending == False, Transaction.amount > 0)
+        select(Transaction).where(Transaction.date >= cutoff, Transaction.pending == False, Transaction.amount > 0)
         .order_by(Transaction.date)
     )
     txns = result.scalars().all()
