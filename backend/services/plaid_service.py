@@ -22,6 +22,7 @@ try:
     from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
     from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
     from plaid.model.transactions_sync_request import TransactionsSyncRequest
+    from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
     from plaid.model.products import Products
     _PLAID_AVAILABLE = True
     _ENV_MAP = {
@@ -118,9 +119,11 @@ def _plaid_str(v: Any, default: str | None = None) -> str | None:
 
 
 async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> None:
-    from plaid.model.accounts_get_request import AccountsGetRequest
     from backend.services.debt_service import sync_debt_from_plaid_account
-    response = client.accounts_get(AccountsGetRequest(access_token=plaid_item.access_token))
+    # /accounts/balance/get forces Plaid to pull a fresh balance from the
+    # institution — /accounts/get (used previously) returns Plaid's cached
+    # balance, which can sit stale at whatever it was on first link/sync.
+    response = client.accounts_balance_get(AccountsBalanceGetRequest(access_token=plaid_item.access_token))
     for acct in response["accounts"]:
         result = await db.execute(select(BankAccount).where(BankAccount.account_id == acct["account_id"]))
         existing = result.scalar_one_or_none()
