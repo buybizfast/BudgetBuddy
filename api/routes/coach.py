@@ -183,6 +183,8 @@ async def chat(request: Request, body: ChatRequest, db: AsyncSession = Depends(g
         )
         response_text = resp.content[0].text
     except Exception as exc:
+        import logging
+        logging.getLogger("api.coach").error("AI coach request failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=502, detail=f"AI coach error: {exc}")
 
     return {"response": response_text}
