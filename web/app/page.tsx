@@ -55,6 +55,8 @@ export default function TodayPage() {
   const [goals, setGoals] = useState<any[]>([])
   const [subs, setSubs] = useState<any[]>([])
   const [txns, setTxns] = useState<any[]>([])
+  const [safeToSpend, setSafeToSpend] = useState<any>(null)
+  const [notifPermission, setNotifPermission] = useState<string>('unsupported')
   const { bills: upcomingBills } = useUpcomingBills(7)
 
   useEffect(() => {
@@ -63,7 +65,39 @@ export default function TodayPage() {
     apiFetch<any[]>('/api/v1/goals/').then(setGoals).catch(() => {})
     apiFetch<any[]>('/api/v1/subscriptions/').then(setSubs).catch(() => {})
     apiFetch<any>(`/api/v1/budget/transactions?year=${year}&month=${month}&limit=5`).then(d => setTxns(d.transactions ?? d)).catch(() => {})
+    apiFetch<any>('/api/v1/safe-to-spend/').then(setSafeToSpend).catch(() => {})
   }, [year, month])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission)
+    }
+  }, [])
+
+  // Fire a browser notification for bills due today/tomorrow, once per bill
+  // per due date.
+  useEffect(() => {
+    if (notifPermission !== 'granted' || upcomingBills.length === 0) return
+    for (const b of upcomingBills) {
+      if (b.days_until > 1) continue
+      const key = `billnotif-${b.merchant}-${b.due_date}`
+      if (localStorage.getItem(key)) continue
+      const when = b.days_until === 0 ? 'today' : 'tomorrow'
+      try {
+        new Notification(`${b.merchant} is due ${when}`, {
+          body: `${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(b.amount)} due ${when}. Make sure the money's there.`,
+          icon: '/icon-192.png',
+        })
+        localStorage.setItem(key, '1')
+      } catch {}
+    }
+  }, [notifPermission, upcomingBills])
+
+  const enableReminders = async () => {
+    if (!('Notification' in window)) return
+    const perm = await Notification.requestPermission()
+    setNotifPermission(perm)
+  }
 
   function logout() {
     clearToken()
@@ -100,6 +134,35 @@ export default function TodayPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
 
+        {/* Safe to Spend */}
+        {safeToSpend && (
+          <div className={cn(
+            'rounded-2xl p-5 shadow-sm text-white',
+            safeToSpend.safe_to_spend < 0
+              ? 'bg-gradient-to-br from-red-500 to-red-700'
+              : safeToSpend.safe_to_spend < 100
+                ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+                : 'bg-gradient-to-br from-emerald-500 to-teal-700'
+          )}>
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet size={14} className="opacity-80" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Safe to Spend</p>
+            </div>
+            <p className="text-3xl font-bold">{fmt(safeToSpend.safe_to_spend)}</p>
+            <p className="text-xs opacity-80 mt-1.5">
+              {fmt(safeToSpend.cash)} cash − {fmt(safeToSpend.upcoming_bills_total)} in bills
+              {safeToSpend.next_paycheck_date
+                ? ` before your ${new Date(safeToSpend.next_paycheck_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} paycheck`
+                : ' due in the next 30 days'}
+            </p>
+            {safeToSpend.safe_to_spend < 0 && (
+              <p className="text-xs font-semibold mt-1.5 bg-white/20 rounded-lg px-2 py-1 inline-block">
+                ⚠ Your upcoming bills exceed your cash — move money or reschedule a bill.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Bill reminders */}
         {upcomingBills.length > 0 && (
           <Link href="/calendar" className="block bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors">
@@ -125,6 +188,13 @@ export default function TodayPage() {
                     <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">+{upcomingBills.length - 3} more</p>
                   )}
                 </div>
+                {notifPermission === 'default' && (
+                  <button
+                    onClick={e => { e.preventDefault(); enableReminders() }}
+                    className="mt-2 text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 rounded-lg px-2.5 py-1.5 transition-colors">
+                    🔔 Notify me when bills are due
+                  </button>
+                )}
               </div>
               <ChevronRight size={16} className="text-amber-400 dark:text-amber-500 shrink-0 mt-1" />
             </div>
