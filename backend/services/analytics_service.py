@@ -63,6 +63,60 @@ async def year_summary(year: int, db: AsyncSession) -> dict[str, Any]:
             "total_income": sum(m["income"] for m in monthly)}
 
 
+async def category_trends(months: int, db: AsyncSession) -> list[dict[str, Any]]:
+    """Month-over-month spending per category for the last N months, with the
+    change of the latest full picture vs the average of the earlier months and
+    how many consecutive months each category has risen."""
+    today = date.today()
+    labels: list[str] = []
+    windows: list[tuple[date, date]] = []
+    for i in range(months - 1, -1, -1):
+        m, y = today.month - i, today.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        labels.append(date(y, m, 1).strftime("%b"))
+        windows.append((date(y, m, 1), date(y, m, calendar.monthrange(y, m)[1])))
+
+    totals: dict[str, list[float]] = {}
+    for idx, (start, end) in enumerate(windows):
+        rows = await db.execute(
+            select(BudgetGroup.name, BudgetCategory.name, func.sum(Transaction.amount))
+            .join(BudgetCategory, Transaction.budget_category_id == BudgetCategory.id)
+            .join(BudgetGroup, BudgetCategory.group_id == BudgetGroup.id)
+            .where(Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
+            .group_by(BudgetGroup.name, BudgetCategory.name)
+        )
+        for group, cat, total in rows:
+            key = f"{group} › {cat}"
+            totals.setdefault(key, [0.0] * len(windows))[idx] = float(total or 0)
+
+    out = []
+    for name, series in totals.items():
+        current = series[-1]
+        prior = series[:-1]
+        prior_avg = sum(prior) / len(prior) if prior else 0
+        change_pct = ((current - prior_avg) / prior_avg * 100) if prior_avg > 0 else None
+        streak = 0
+        for i in range(len(series) - 1, 0, -1):
+            if series[i] > series[i - 1] > 0:
+                streak += 1
+            else:
+                break
+        out.append({
+            "category": name,
+            "months": labels,
+            "totals": [round(v, 2) for v in series],
+            "current": round(current, 2),
+            "prior_avg": round(prior_avg, 2),
+            "change_pct": round(change_pct, 1) if change_pct is not None else None,
+            "rising_streak": streak,
+        })
+    # Biggest current spenders first.
+    out.sort(key=lambda x: x["current"], reverse=True)
+    return out
+
+
 async def category_breakdown(year: int, month: int, db: AsyncSession) -> list[dict[str, Any]]:
     start = date(year, month, 1)
     end = date(year, month, calendar.monthrange(year, month)[1])

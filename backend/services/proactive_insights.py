@@ -111,6 +111,21 @@ async def get_proactive_alerts(db: AsyncSession) -> list[dict]:
                 "/transactions",
             ))
 
+    # --- Rising spending trends -------------------------------------------
+    try:
+        from backend.services.analytics_service import category_trends
+        trends = await category_trends(4, db)
+        risers = [t for t in trends if t["rising_streak"] >= 2 and t["current"] >= 50]
+        risers.sort(key=lambda t: t["current"], reverse=True)
+        for t in risers[:2]:
+            alerts.append(_alert(
+                "warn", f"{t['category']} keeps climbing",
+                f"Up {t['rising_streak'] + 1} months in a row — ${t['current']:,.2f} this month vs ${t['prior_avg']:,.2f} average.",
+                "/spending",
+            ))
+    except Exception:
+        pass
+
     # --- Projected negative balance ---------------------------------------
     try:
         from api.routes.cashflow import get_forecast

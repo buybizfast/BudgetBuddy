@@ -36,6 +36,77 @@ function fmt2(n: number) {
 
 type TrendWindow = 3 | 6 | 12
 
+interface CategoryTrend {
+  category: string
+  months: string[]
+  totals: number[]
+  current: number
+  prior_avg: number
+  change_pct: number | null
+  rising_streak: number
+}
+
+function CategoryTrends() {
+  const [trends, setTrends] = useState<CategoryTrend[]>([])
+
+  useEffect(() => {
+    apiFetch<CategoryTrend[]>('/api/v1/spending-analytics/category-trends?months=4').then(setTrends).catch(() => {})
+  }, [])
+
+  const shown = trends.filter(t => t.current > 0 || t.prior_avg > 0).slice(0, 8)
+  if (shown.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">Category Trends</h3>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">This month vs your 3-month average</p>
+      <div className="space-y-3">
+        {shown.map(t => {
+          const max = Math.max(...t.totals, 1)
+          const rising = t.change_pct !== null && t.change_pct >= 15
+          const falling = t.change_pct !== null && t.change_pct <= -15
+          return (
+            <div key={t.category}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-gray-700 dark:text-gray-300 truncate flex items-center gap-1.5">
+                  {t.category}
+                  {t.rising_streak >= 2 && (
+                    <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 rounded-full">
+                      ↑ {t.rising_streak + 1} mo streak
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 ml-2 flex items-center gap-2">
+                  <span className="text-gray-900 dark:text-gray-100 font-medium">{fmt2(t.current)}</span>
+                  {t.change_pct !== null && (
+                    <span className={cn('font-semibold text-[11px]',
+                      rising ? 'text-red-500' : falling ? 'text-emerald-500' : 'text-gray-400 dark:text-gray-500')}>
+                      {t.change_pct > 0 ? '+' : ''}{t.change_pct.toFixed(0)}%
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-end gap-1 h-8">
+                {t.totals.map((v, i) => {
+                  const isCurrent = i === t.totals.length - 1
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                      <div className={cn('w-full rounded-sm transition-all',
+                        isCurrent ? (rising ? 'bg-red-400' : 'bg-blue-500') : 'bg-gray-200 dark:bg-gray-600')}
+                        style={{ height: `${Math.max(6, (v / max) * 100)}%` }} />
+                      <span className="text-[9px] text-gray-300 dark:text-gray-600">{t.months[i]}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function SpendingPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -263,6 +334,9 @@ export default function SpendingPage() {
           )}
         </div>
       </div>
+
+      {/* Category Trends */}
+      <CategoryTrends />
 
       {/* Category Breakdown */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">

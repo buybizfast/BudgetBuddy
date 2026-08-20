@@ -60,6 +60,60 @@ function fmt0(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
 }
 
+function DebtMilestones({ debts, totalPaid, totalOriginal }: { debts: Debt[]; totalPaid: number; totalOriginal: number }) {
+  const overallPct = totalOriginal > 0 ? (totalPaid / totalOriginal) * 100 : 0
+  const paidOff = debts.filter(d => d.is_paid_off)
+
+  const milestones: { emoji: string; label: string; achieved: boolean }[] = [
+    { emoji: '🏁', label: 'Started your debt-free journey', achieved: debts.length > 0 && totalPaid > 0 },
+    { emoji: '🎯', label: '25% of all debt paid', achieved: overallPct >= 25 },
+    { emoji: '⚡', label: 'Halfway there — 50% paid', achieved: overallPct >= 50 },
+    { emoji: '🔥', label: '75% paid — the home stretch', achieved: overallPct >= 75 },
+    { emoji: '🏆', label: 'Completely debt free', achieved: debts.length > 0 && debts.every(d => d.is_paid_off) },
+  ]
+  const achieved = milestones.filter(m => m.achieved)
+  const next = milestones.find(m => !m.achieved)
+
+  if (debts.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Milestones</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{achieved.length} of {milestones.length}</p>
+      </div>
+      {paidOff.length > 0 && (
+        <div className="mb-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2">
+          <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+            🎉 {paidOff.length === 1
+              ? `${paidOff[0].name} is paid off!`
+              : `${paidOff.length} debts crushed: ${paidOff.map(d => d.name).join(', ')}`}
+          </p>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {milestones.map(m => (
+          <span key={m.label} title={m.label}
+            className={cn('text-xs px-2.5 py-1.5 rounded-full border font-medium flex items-center gap-1',
+              m.achieved
+                ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 grayscale opacity-60')}>
+            {m.emoji} {m.label}
+          </span>
+        ))}
+      </div>
+      {next && (
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2.5">
+          Next up: {next.emoji} {next.label}
+          {next.label.includes('25%') && ` — ${fmt(Math.max(0, totalOriginal * 0.25 - totalPaid))} to go`}
+          {next.label.includes('50%') && ` — ${fmt(Math.max(0, totalOriginal * 0.5 - totalPaid))} to go`}
+          {next.label.includes('75%') && ` — ${fmt(Math.max(0, totalOriginal * 0.75 - totalPaid))} to go`}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function DebtPage() {
   const [debts, setDebts] = useState<Debt[]>([])
   const [loading, setLoading] = useState(true)
@@ -239,6 +293,8 @@ export default function DebtPage() {
           </div>
         </div>
       </div>
+
+      <DebtMilestones debts={debts} totalPaid={totalPaid} totalOriginal={totalOriginal} />
 
       {utilization !== null && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">

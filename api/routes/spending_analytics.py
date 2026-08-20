@@ -21,6 +21,10 @@ async def top_merchants(year: int = Query(...), month: int = Query(...), limit: 
 async def year_summary(year: int = Query(...), db: AsyncSession = Depends(get_session)):
     return await analytics_service.year_summary(year, db)
 
+@router.get("/category-trends")
+async def category_trends(months: int = Query(default=4, ge=2, le=12), db: AsyncSession = Depends(get_session)):
+    return await analytics_service.category_trends(months, db)
+
 @router.get("/category-breakdown")
 async def category_breakdown(year: int = Query(...), month: int = Query(...), db: AsyncSession = Depends(get_session)):
     return await analytics_service.category_breakdown(year, month, db)
