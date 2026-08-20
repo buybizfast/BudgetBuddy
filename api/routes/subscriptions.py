@@ -24,20 +24,29 @@ class SubscriptionUpdate(BaseModel):
     status: Optional[str] = None
     notes: Optional[str] = None
     cadence: Optional[str] = None
+    amount: Optional[float] = None
+    next_expected: Optional[date] = None
 
 
 def _apply_cadence_override(item: dict, override: Optional[UserSubscription]) -> dict:
-    """Apply a user-chosen cadence override on top of a detected pattern, recomputing
-    the days-per-occurrence and annual cost estimate to match."""
-    if not override or not override.cadence or override.cadence == item["cadence"]:
+    """Apply user-chosen overrides (cadence, amount, next due date) on top of a
+    detected pattern, recomputing the days-per-occurrence and annual cost
+    estimate to match."""
+    if not override:
         return item
-    expected_days = _CADENCE_DAYS[override.cadence]
-    return {
+    cadence = override.cadence or item["cadence"]
+    expected_days = _CADENCE_DAYS.get(cadence, item["expected_days"])
+    amount = float(override.amount) if override.amount is not None else item["amount"]
+    out = {
         **item,
-        "cadence": override.cadence,
+        "cadence": cadence,
         "expected_days": expected_days,
-        "annual_cost": round(item["amount"] * (365 / expected_days), 2),
+        "amount": amount,
+        "annual_cost": round(amount * (365 / expected_days), 2),
     }
+    if override.next_expected is not None:
+        out["next_expected"] = override.next_expected.isoformat()
+    return out
 
 
 def _manual_to_dict(sub: UserSubscription) -> dict:
@@ -150,9 +159,15 @@ async def update_subscription(merchant_name: str, body: SubscriptionUpdate, db: 
         sub.notes = body.notes
     if body.cadence is not None:
         sub.cadence = body.cadence
+    if body.amount is not None:
+        sub.amount = body.amount
+    if body.next_expected is not None:
+        sub.next_expected = body.next_expected
     sub.updated_at = datetime.utcnow()
     await db.commit()
-    return {"status": sub.status, "notes": sub.notes, "cadence": sub.cadence}
+    return {"status": sub.status, "notes": sub.notes, "cadence": sub.cadence,
+            "amount": float(sub.amount) if sub.amount is not None else None,
+            "next_expected": sub.next_expected.isoformat() if sub.next_expected else None}
 
 
 @router.delete("/{merchant_name:path}")

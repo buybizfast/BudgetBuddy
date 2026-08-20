@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Loader2, AlertCircle, Plus, Trash2, X, RotateCcw, ChevronDown } from 'lucide-react'
+import { RefreshCw, Loader2, AlertCircle, Plus, Trash2, X, RotateCcw, ChevronDown, Pencil, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
@@ -141,6 +141,10 @@ export default function SubscriptionsPage() {
   const [showDeleted, setShowDeleted] = useState(false)
   const [loadingDeleted, setLoadingDeleted] = useState(false)
   const [restoringMerchant, setRestoringMerchant] = useState<string | null>(null)
+  const [editingMerchant, setEditingMerchant] = useState<string | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editNextExpected, setEditNextExpected] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const fetchSubs = useCallback(async () => {
     setLoading(true)
@@ -222,6 +226,31 @@ export default function SubscriptionsPage() {
       await fetchSubs()
     } finally {
       setSaving(false)
+    }
+  }
+
+  const startEdit = (sub: Subscription) => {
+    setEditingMerchant(sub.merchant)
+    setEditAmount(String(sub.amount))
+    setEditNextExpected(sub.next_expected)
+  }
+
+  const saveEdit = async (merchant: string) => {
+    const amount = parseFloat(editAmount)
+    if (isNaN(amount) || amount < 0) return
+    setSavingEdit(true)
+    try {
+      await apiFetch(`/api/v1/subscriptions/${encodeURIComponent(merchant)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          amount,
+          next_expected: editNextExpected || undefined,
+        }),
+      })
+      setEditingMerchant(null)
+      await fetchSubs()
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -460,29 +489,76 @@ export default function SubscriptionsPage() {
 
                 {/* Right: amount + status */}
                 <div className="flex items-center gap-4 shrink-0">
-                  <div className="text-right">
-                    <p className={cn(
-                      'text-base font-bold',
-                      isCancelled ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'
-                    )}>
-                      {fmt(sub.amount)}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">{fmt(toMonthly(sub))}/mo</p>
-                  </div>
-                  <StatusToggle
-                    status={sub.status}
-                    onChange={s => updateStatus(sub.merchant, s)}
-                    loading={isUpdating}
-                  />
-                  <button
-                    onClick={() => removeSubscription(sub.merchant)}
-                    disabled={removingMerchant === sub.merchant}
-                    aria-label={`Remove ${sub.merchant}`}
-                    title={sub.is_manual ? 'Delete subscription' : 'Hide from this list'}
-                    className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
-                  >
-                    {removingMerchant === sub.merchant ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                  </button>
+                  {editingMerchant === sub.merchant ? (
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          value={editAmount}
+                          onChange={e => setEditAmount(e.target.value)}
+                          inputMode="decimal"
+                          aria-label="Amount"
+                          className="w-24 text-sm text-right rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="date"
+                          value={editNextExpected}
+                          onChange={e => setEditNextExpected(e.target.value)}
+                          aria-label="Next due date"
+                          className="w-32 text-xs rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <button
+                        onClick={() => saveEdit(sub.merchant)}
+                        disabled={savingEdit || !editAmount || isNaN(parseFloat(editAmount))}
+                        aria-label="Save changes"
+                        className="w-7 h-7 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg flex items-center justify-center transition-colors"
+                      >
+                        {savingEdit ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      </button>
+                      <button
+                        onClick={() => setEditingMerchant(null)}
+                        disabled={savingEdit}
+                        aria-label="Cancel edit"
+                        className="w-7 h-7 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-300 rounded-lg flex items-center justify-center transition-colors"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-right">
+                        <p className={cn(
+                          'text-base font-bold',
+                          isCancelled ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'
+                        )}>
+                          {fmt(sub.amount)}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{fmt(toMonthly(sub))}/mo</p>
+                      </div>
+                      <StatusToggle
+                        status={sub.status}
+                        onChange={s => updateStatus(sub.merchant, s)}
+                        loading={isUpdating}
+                      />
+                      <button
+                        onClick={() => startEdit(sub)}
+                        aria-label={`Edit ${sub.merchant}`}
+                        title="Edit amount and next due date"
+                        className="text-gray-300 dark:text-gray-600 hover:text-blue-500 transition-colors"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => removeSubscription(sub.merchant)}
+                        disabled={removingMerchant === sub.merchant}
+                        aria-label={`Remove ${sub.merchant}`}
+                        title={sub.is_manual ? 'Delete subscription' : 'Hide from this list'}
+                        className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors disabled:opacity-50"
+                      >
+                        {removingMerchant === sub.merchant ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )
