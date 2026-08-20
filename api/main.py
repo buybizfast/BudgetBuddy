@@ -26,6 +26,7 @@ from api.routes import report as report_router
 from api.routes import coach as coach_router
 from api.routes import paychecks as paychecks_router
 from api.routes import safe_to_spend as safe_to_spend_router
+from api.routes import digest as digest_router
 from api.ws_manager import ws_manager
 from sqlalchemy import text
 
@@ -113,8 +114,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception as exc:
                 log.error("Budget sync error: %s", exc)
 
+    async def digest_loop() -> None:
+        # Check hourly whether the weekly digest is due (Monday morning);
+        # maybe_send_weekly_digest dedupes per ISO week, so restarts and
+        # repeated checks can't double-send.
+        from backend.services.digest_service import maybe_send_weekly_digest
+        while True:
+            try:
+                async with session_scope() as db:
+                    await maybe_send_weekly_digest(db)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.error("Digest loop error: %s", exc)
+            await asyncio.sleep(3600)
+
     sync_task = asyncio.create_task(budget_sync_loop())
+    digest_task = asyncio.create_task(digest_loop())
     yield
+    digest_task.cancel()
+    try:
+        await digest_task
+    except asyncio.CancelledError:
+        pass
     sync_task.cancel()
     try:
         await sync_task
@@ -146,6 +168,7 @@ app.include_router(report_router.router, **_protected)
 app.include_router(coach_router.router, **_protected)
 app.include_router(paychecks_router.router, **_protected)
 app.include_router(safe_to_spend_router.router, **_protected)
+app.include_router(digest_router.router, **_protected)
 
 @app.get("/", tags=["health"])
 async def health():

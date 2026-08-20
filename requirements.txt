@@ -11,3 +11,4 @@ passlib>=1.7.4
 slowapi>=0.1.9
 cryptography>=41.0.0
 plaid-python>=40.0.0
+resend>=2.0.0

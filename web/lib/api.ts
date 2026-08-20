@@ -8,6 +8,9 @@ export async function apiFetch<T = unknown>(path: string, init?: RequestInit): P
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers ?? {}) },
   })
   if (res.status === 401) { clearToken(); window.location.href = '/login' }
-  if (!res.ok) throw new Error(`API error ${res.status}`)
+  if (!res.ok) {
+    const detail = await res.json().then(d => d?.detail).catch(() => null)
+    throw new Error(typeof detail === 'string' ? detail : `API error ${res.status}`)
+  }
   return res.json()
 }

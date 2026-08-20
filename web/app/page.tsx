@@ -42,6 +42,38 @@ function ProgressBar({ value, max, color = 'bg-blue-500' }: { value: number; max
   )
 }
 
+function DigestButton() {
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [error, setError] = useState('')
+
+  const send = async () => {
+    setState('sending')
+    setError('')
+    try {
+      await apiFetch('/api/v1/digest/send', { method: 'POST' })
+      setState('sent')
+    } catch (e: any) {
+      setError(e?.message || 'Could not send digest')
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Weekly Digest</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          {state === 'sent' ? 'Sent! Check your inbox.' : state === 'error' ? error : 'A summary email every Monday morning — or send one now.'}
+        </p>
+      </div>
+      <button onClick={send} disabled={state === 'sending'}
+        className="shrink-0 text-xs font-semibold px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors">
+        {state === 'sending' ? 'Sending…' : 'Email me now'}
+      </button>
+    </div>
+  )
+}
+
 export default function TodayPage() {
   const router = useRouter()
   const now = new Date()
@@ -312,6 +344,9 @@ export default function TodayPage() {
             </div>
           </div>
         )}
+
+        {/* Weekly digest */}
+        <DigestButton />
 
         {/* Quick access grid */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">

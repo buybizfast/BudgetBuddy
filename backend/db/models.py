@@ -275,6 +275,15 @@ class NetWorthSnapshot(Base):
     )
 
 
+class AppState(Base):
+    """Small key-value store for app-level state that must survive restarts
+    (e.g. when the weekly digest was last sent)."""
+    __tablename__ = "app_state"
+    key = Column(String(100), primary_key=True)
+    value = Column(String(500), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
 class SpendingAlert(Base):
     __tablename__ = "spending_alerts"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
