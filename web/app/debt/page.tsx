@@ -40,7 +40,6 @@ function fmtMonthYear(iso: string) {
 
 interface PlanDebt { id: string; name: string; balance: number; minimum_payment: number; interest_rate: number; payoff_month: number; budgeted_extra: number; payoff_date?: string }
 
-interface PayoffPlan { debts: PlanDebt[]; total_months: number; total_interest: number; strategy: string; total_budgeted_extra: number }
 
 interface SchedulePayment { id: string; name: string; payment: number; balance: number }
 
@@ -64,10 +63,6 @@ function fmt0(n: number) {
 export default function DebtPage() {
   const [debts, setDebts] = useState<Debt[]>([])
   const [loading, setLoading] = useState(true)
-  const [plan, setPlan] = useState<PayoffPlan | null>(null)
-  const [strategy, setStrategy] = useState<'snowball' | 'avalanche'>('snowball')
-  const [extraMonthly, setExtraMonthly] = useState('0')
-  const [calcLoading, setCalcLoading] = useState(false)
   const [expandedDebt, setExpandedDebt] = useState<string | null>(null)
   const [paymentInputs, setPaymentInputs] = useState<Record<string, { amount: string; note: string }>>({})
   const [payingId, setPayingId] = useState<string | null>(null)
@@ -98,14 +93,6 @@ export default function DebtPage() {
     setLoading(true)
     fetchDebts().finally(() => setLoading(false))
   }, [fetchDebts])
-
-  const calcPlan = async () => {
-    setCalcLoading(true)
-    try {
-      const res = await apiFetch<any>(`/api/v1/debt/plan?strategy=${strategy}&extra_monthly=${parseFloat(extraMonthly) || 0}`)
-      setPlan(res)
-    } catch {} finally { setCalcLoading(false) }
-  }
 
   const logPayment = async (debtId: string) => {
     const inp = paymentInputs[debtId]
@@ -269,8 +256,8 @@ export default function DebtPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-3">
+      <div className="grid grid-cols-1 gap-4">
+        <div className="space-y-3">
           {showAddForm && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Debt</h3>
@@ -502,73 +489,6 @@ export default function DebtPage() {
           )}
         </div>
 
-        {/* Payoff Plan Sidebar */}
-        <div className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Calculator size={14} className="text-blue-600" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Payoff Plan</h3>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block font-medium">Strategy</label>
-                <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
-                  <button onClick={() => setStrategy('snowball')} className={cn('flex-1 text-xs py-1.5 rounded-md transition-colors font-medium', strategy === 'snowball' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200')}>
-                    Snowball
-                  </button>
-                  <button onClick={() => setStrategy('avalanche')} className={cn('flex-1 text-xs py-1.5 rounded-md transition-colors font-medium', strategy === 'avalanche' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200')}>
-                    Avalanche
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
-                  {strategy === 'snowball' ? 'Pay smallest balance first for quick wins' : 'Pay highest interest first to save money'}
-                </p>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Extra Monthly Payment</label>
-                <div className="flex items-center gap-1">
-                  <span className="text-gray-400 dark:text-gray-500 text-sm">$</span>
-                  <input type="number" value={extraMonthly} onChange={e => setExtraMonthly(e.target.value)}
-                    className="flex-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-2 py-1.5 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
-              <button onClick={calcPlan} disabled={calcLoading}
-                className="w-full text-sm py-2 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-2xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 font-semibold">
-                {calcLoading ? <Loader2 size={12} className="animate-spin" /> : <Calculator size={12} />}
-                Calculate Plan
-              </button>
-            </div>
-
-            {plan && (
-              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-3">
-                {plan.total_budgeted_extra > 0 && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <DollarSign size={11} />Includes {fmt(plan.total_budgeted_extra)}/mo already budgeted above minimums
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-slate-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Debt Free In</p>
-                    <p className="text-base font-bold text-gray-900 dark:text-gray-100">{plan.total_months} mo</p>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Total Interest</p>
-                    <p className="text-base font-bold text-red-500">{fmt(plan.total_interest)}</p>
-                  </div>
-                </div>
-                {plan.debts.length > 0 && (
-                  <div className="bg-slate-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">First Payoff</p>
-                    <p className="text-sm font-semibold text-blue-600">
-                      {plan.debts.reduce((a, b) => a.payoff_month <= b.payoff_month ? a : b).name}
-                      {' '}({Math.min(...plan.debts.map(d => d.payoff_month))} mo)
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {debts.length > 0 && <PayoffForecast />}
