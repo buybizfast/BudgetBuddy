@@ -111,6 +111,20 @@ async def get_proactive_alerts(db: AsyncSession) -> list[dict]:
                 "/transactions",
             ))
 
+    # --- Projected negative balance ---------------------------------------
+    try:
+        from api.routes.cashflow import get_forecast
+        forecast = await get_forecast(days=30, db=db)
+        if forecast["first_negative_date"]:
+            neg = date.fromisoformat(forecast["first_negative_date"])
+            alerts.append(_alert(
+                "alert", f"Balance projected to go negative on {neg.strftime('%b %-d')}",
+                f"Low point {forecast['min_balance']:,.2f}. Move a bill, add funds, or trim spending before then.",
+                "/calendar",
+            ))
+    except Exception:
+        pass
+
     # Highest severity first, cap the list so the card stays scannable.
     severity_rank = {"alert": 0, "warn": 1, "info": 2}
     alerts.sort(key=lambda a: severity_rank.get(a["severity"], 3))

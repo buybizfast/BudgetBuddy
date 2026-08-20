@@ -123,6 +123,82 @@ function paycheckDaysForMonth(p: PaycheckSchedule, year: number, month: number):
   return days
 }
 
+interface ForecastEvent { type: 'paycheck' | 'bill'; name: string; amount: number }
+interface ForecastDay { date: string; in: number; out: number; balance: number; events: ForecastEvent[] }
+interface Forecast {
+  starting_cash: number
+  ending_balance: number
+  min_balance: number
+  min_date: string
+  first_negative_date: string | null
+  days: ForecastDay[]
+}
+
+function CashFlowForecast() {
+  const [forecast, setForecast] = useState<Forecast | null>(null)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    apiFetch<Forecast>('/api/v1/cashflow/forecast').then(setForecast).catch(() => {})
+  }, [])
+
+  if (!forecast) return null
+  const eventDays = forecast.days.filter(d => d.events.length > 0)
+  const shown = expanded ? eventDays : eventDays.slice(0, 5)
+  const fmtDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+      <div className="px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">30-Day Cash Flow</h2>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{fmt0(forecast.starting_cash)} today</span>
+        </div>
+        {forecast.first_negative_date ? (
+          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 text-xs text-red-700 dark:text-red-300 font-medium">
+            ⚠ Your balance is projected to go negative on {fmtDay(forecast.first_negative_date)} (low point {fmt(forecast.min_balance)}).
+            Move a bill or add funds before then.
+          </div>
+        ) : (
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+            ✓ You stay positive all month — lowest point {fmt(forecast.min_balance)} on {fmtDay(forecast.min_date)}.
+          </div>
+        )}
+      </div>
+      {eventDays.length > 0 && (
+        <div className="divide-y divide-gray-50 dark:divide-gray-700 border-t border-gray-100 dark:border-gray-700">
+          {shown.map(d => (
+            <div key={d.date} className="px-4 py-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{fmtDay(d.date)}</p>
+                <p className={cn('text-xs font-bold', d.balance < 0 ? 'text-red-500' : d.balance < 100 ? 'text-amber-500' : 'text-gray-700 dark:text-gray-300')}>
+                  {fmt(d.balance)}
+                </p>
+              </div>
+              <div className="mt-1 space-y-0.5">
+                {d.events.map((e, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600 dark:text-gray-400 truncate">{e.type === 'paycheck' ? '💰' : '📄'} {e.name}</span>
+                    <span className={cn('font-medium shrink-0 ml-2', e.type === 'paycheck' ? 'text-green-600 dark:text-green-400' : 'text-red-500')}>
+                      {e.type === 'paycheck' ? '+' : '−'}{fmt(e.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {eventDays.length > 5 && (
+            <button onClick={() => setExpanded(v => !v)}
+              className="w-full py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors">
+              {expanded ? 'Show less' : `Show all ${eventDays.length} days`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface BillEntry {
   sub: Subscription
   day: number
@@ -288,6 +364,9 @@ export default function CalendarPage() {
           {error}
         </div>
       )}
+
+      {/* Cash-flow forecast */}
+      <CashFlowForecast />
 
       {/* Summary bar */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm px-5 py-3 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
