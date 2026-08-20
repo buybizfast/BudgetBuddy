@@ -88,6 +88,7 @@ export default function TodayPage() {
   const [subs, setSubs] = useState<any[]>([])
   const [txns, setTxns] = useState<any[]>([])
   const [safeToSpend, setSafeToSpend] = useState<any>(null)
+  const [alerts, setAlerts] = useState<any[]>([])
   const [notifPermission, setNotifPermission] = useState<string>('unsupported')
   const { bills: upcomingBills } = useUpcomingBills(7)
 
@@ -98,6 +99,7 @@ export default function TodayPage() {
     apiFetch<any[]>('/api/v1/subscriptions/').then(setSubs).catch(() => {})
     apiFetch<any>(`/api/v1/budget/transactions?year=${year}&month=${month}&limit=5`).then(d => setTxns(d.transactions ?? d)).catch(() => {})
     apiFetch<any>('/api/v1/safe-to-spend/').then(setSafeToSpend).catch(() => {})
+    apiFetch<any[]>('/api/v1/insights/alerts').then(setAlerts).catch(() => {})
   }, [year, month])
 
   useEffect(() => {
@@ -231,6 +233,31 @@ export default function TodayPage() {
               <ChevronRight size={16} className="text-amber-400 dark:text-amber-500 shrink-0 mt-1" />
             </div>
           </Link>
+        )}
+
+        {/* Coach flags */}
+        {alerts.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+              <Sparkles size={14} className="text-violet-500" />
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Heads Up</h2>
+            </div>
+            <div className="divide-y divide-gray-50 dark:divide-gray-700">
+              {alerts.map((a, i) => (
+                <Link key={i} href={a.href} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <span className={cn(
+                    'mt-1 w-2 h-2 rounded-full shrink-0',
+                    a.severity === 'alert' ? 'bg-red-500' : a.severity === 'warn' ? 'bg-amber-400' : 'bg-blue-400'
+                  )} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{a.title}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{a.detail}</p>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-300 dark:text-gray-600 shrink-0 mt-1" />
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Budget summary */}
