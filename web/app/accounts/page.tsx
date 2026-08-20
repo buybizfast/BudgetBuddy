@@ -1,10 +1,17 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Building2, CreditCard, RefreshCw, Loader2, Trash2, TrendingUp, AlertTriangle } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { PlaidLinkButton } from '@/components/PlaidLinkButton'
 import { PageHeader } from '@/components/PageHeader'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api'
+
+interface DebtSummary {
+  account_type: string
+  balance: number
+  credit_limit: number | null
+}
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -21,6 +28,11 @@ export default function AccountsPage() {
   const [syncing, setSyncing] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [debts, setDebts] = useState<DebtSummary[]>([])
+
+  useEffect(() => {
+    apiFetch<DebtSummary[]>('/api/v1/debt/').then(setDebts).catch(() => {})
+  }, [])
 
   const handleSyncAll = async () => {
     setSyncing(true)
@@ -41,9 +53,12 @@ export default function AccountsPage() {
 
   const { assets, liabilities: debt, net_worth: netWorthTotal } = netWorth
 
-  const creditCards = accounts.filter(a => a.type === 'credit' && a.credit_limit)
-  const totalCreditBalance = creditCards.reduce((s, a) => s + (a.current_balance ?? 0), 0)
-  const totalCreditLimit = creditCards.reduce((s, a) => s + (a.credit_limit ?? 0), 0)
+  // Utilization comes from DebtAccounts — the same source the Debt tab uses —
+  // which tracks live balances (payments, manual edits, manual limits) instead
+  // of the raw Plaid snapshot on BankAccount, so both tabs always agree.
+  const creditCards = debts.filter(d => d.account_type === 'credit_card' && d.credit_limit)
+  const totalCreditBalance = creditCards.reduce((s, d) => s + d.balance, 0)
+  const totalCreditLimit = creditCards.reduce((s, d) => s + (d.credit_limit ?? 0), 0)
   const utilization = totalCreditLimit > 0 ? (totalCreditBalance / totalCreditLimit) * 100 : null
   const utilizationColor = (pct: number) => pct >= 70 ? 'text-red-500' : pct >= 30 ? 'text-amber-500' : 'text-emerald-500'
   const utilizationBarColor = (pct: number) => pct >= 70 ? 'bg-red-500' : pct >= 30 ? 'bg-amber-400' : 'bg-emerald-500'
