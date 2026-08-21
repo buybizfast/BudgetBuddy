@@ -15,7 +15,7 @@ _CATEGORY_MAP: dict[str, list[str]] = {
     "FOOD_AND_DRINK_FAST_FOOD": ["Restaurants"],
     "FOOD_AND_DRINK_COFFEE": ["Coffee Shops"],
     "FOOD_AND_DRINK_GROCERIES": ["Groceries"],
-    "FOOD_AND_DRINK_ALCOHOL_AND_BAR": ["Restaurants", "Entertainment"],
+    "FOOD_AND_DRINK_ALCOHOL_AND_BAR": ["Alcohol", "Restaurants", "Entertainment"],
     "TRANSPORTATION_GAS_STATION": ["Gas"],
     "TRANSPORTATION_PARKING": ["Parking/Tolls"],
     "TRANSPORTATION_PUBLIC_TRANSIT": ["Public Transit"],

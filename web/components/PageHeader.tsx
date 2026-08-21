@@ -10,7 +10,11 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, left, right }: PageHeaderProps) {
   return (
     <header className="bg-blue-600 px-4 pt-5 pb-5">
-      <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+      {/* pr-11 on narrow screens keeps the header's right-hand controls clear
+          of the fixed dark-mode toggle pinned to the viewport's top-right.
+          Above 2xl-container width the toggle sits outside the container, so
+          the padding is dropped. */}
+      <div className="max-w-2xl mx-auto flex items-center justify-between gap-3 pr-11 xl:pr-0">
         <div className="flex items-center gap-3 min-w-0">
           {left}
           <div className="min-w-0">

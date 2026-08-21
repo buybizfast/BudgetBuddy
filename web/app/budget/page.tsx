@@ -254,7 +254,7 @@ export default function BudgetPage() {
                       className="bg-white/20 text-white placeholder-white/50 text-2xl font-bold w-32 rounded px-1 focus:outline-none focus:ring-1 focus:ring-white/60 border border-white/30" />
                   </div>
                 ) : (
-                  <button onClick={() => { setEditingIncome(true); setIncomeInput(String(budget?.total_income ?? 0)) }}
+                  <button onClick={() => { setEditingIncome(true); setIncomeInput(budget?.total_income ? String(budget.total_income) : '') }}
                     className={cn('text-2xl font-bold transition-opacity hover:opacity-80', isOver || isZero ? 'text-white' : 'text-gray-900 dark:text-gray-100')}>
                     {fmt(budget?.total_income ?? 0)}
                   </button>
@@ -331,7 +331,7 @@ export default function BudgetPage() {
                 onToggle={() => toggleGroup(group.id)}
                 editingCategory={editingCategory}
                 categoryInput={categoryInput}
-                onStartEdit={(id, val) => { setEditingCategory(id); setCategoryInput(String(val)) }}
+                onStartEdit={(id, val) => { setEditingCategory(id); setCategoryInput(val ? String(val) : '') }}
                 onInputChange={setCategoryInput}
                 onSaveCategory={saveCategory}
                 addingCategory={addingCategoryGroup === group.id}
@@ -562,25 +562,27 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
         aria-expanded={!collapsed}
         aria-controls={`group-${group.id}`}
         onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onToggle()}
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700"
+        className="flex items-center justify-between gap-2 px-2 sm:px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700"
         onClick={onToggle}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <GripVertical size={13} className="text-gray-300 dark:text-gray-600 shrink-0 cursor-grab active:cursor-grabbing" aria-hidden="true" />
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <GripVertical size={13} className="hidden sm:block text-gray-300 dark:text-gray-600 shrink-0 cursor-grab active:cursor-grabbing" aria-hidden="true" />
           <ChevronDown size={14} aria-hidden="true" className={cn('text-gray-400 dark:text-gray-500 shrink-0 transition-transform', collapsed && '-rotate-90')} />
           <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{group.name}</span>
         </div>
-        <div className="flex items-center gap-5 shrink-0 text-xs">
-          <div className="text-right">
+        <div className="flex items-center gap-0 sm:gap-5 shrink-0 text-xs">
+          <div className="text-right w-16 sm:w-auto">
             <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider">Planned</p>
             <p className="font-semibold text-gray-700 dark:text-gray-300">{fmt(group.budgeted)}</p>
           </div>
-          <div className="text-right">
+          <div className="text-right w-16 sm:w-auto">
             <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider">Spent</p>
             <p className={cn('font-semibold', over ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300')}>{fmt(group.spent)}</p>
           </div>
-          <div className="text-right">
-            <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider">Remaining</p>
+          <div className="text-right w-16 sm:w-auto">
+            <p className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wider">
+              <span className="sm:hidden">Left</span><span className="hidden sm:inline">Remaining</span>
+            </p>
             <p className={cn('font-semibold', group.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600')}>{fmt(group.remaining)}</p>
           </div>
         </div>
@@ -590,11 +592,13 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
         <div id={`group-${group.id}`}>
           {/* Column header row */}
           <div className="flex items-center px-4 py-1.5 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
-            <span className="flex-1 text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-4">Category</span>
+            <span className="flex-1 text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1 sm:pl-4">Category</span>
             <div className="flex items-center gap-0 shrink-0">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-20 text-right">Planned</span>
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-20 text-right">Spent</span>
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-20 text-right">Remaining</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-16 sm:w-20 text-right">Planned</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-16 sm:w-20 text-right">Spent</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider w-16 sm:w-20 text-right">
+                <span className="sm:hidden">Left</span><span className="hidden sm:inline">Remaining</span>
+              </span>
             </div>
           </div>
 
@@ -693,8 +697,8 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
         isDragOver && 'border-t-2 border-t-blue-500'
       )}
     >
-      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
-        <span className="shrink-0 -ml-1 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Drag to reorder">
+      <div className="flex items-center gap-1.5 sm:gap-3 px-2 sm:px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
+        <span className="hidden sm:block shrink-0 -ml-1 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Drag to reorder">
           <GripVertical size={13} />
         </span>
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-1">
@@ -776,30 +780,31 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
         <div className="flex items-center shrink-0">
           {/* Planned — editable */}
           {editing ? (
-            <div className="flex items-center gap-0.5 w-20 justify-end">
+            <div className="flex items-center gap-0.5 w-16 sm:w-20 justify-end">
               <span className="text-gray-400 dark:text-gray-500 text-xs">$</span>
               <input autoFocus value={input}
+                inputMode="decimal"
                 onChange={e => onInputChange(e.target.value)}
                 onBlur={onSave}
                 onKeyDown={e => e.key === 'Enter' && onSave()}
-                className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-16 rounded border border-blue-400 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-right" />
+                className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-12 sm:w-16 rounded border border-blue-400 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-right" />
             </div>
           ) : (
             <button onClick={onStartEdit}
-              className="text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 w-20 text-right transition-colors font-medium">
+              className="text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 w-16 sm:w-20 text-right transition-colors font-medium">
               {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(cat.budgeted)}
             </button>
           )}
-          <span className={cn('text-xs w-20 text-right', over ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400')}>
+          <span className={cn('text-xs w-16 sm:w-20 text-right', over ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400')}>
             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(cat.spent)}
           </span>
-          <span className={cn('text-xs w-20 text-right font-semibold', cat.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600')}>
+          <span className={cn('text-xs w-16 sm:w-20 text-right font-semibold', cat.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600')}>
             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(cat.remaining)}
           </span>
           <button
             onClick={() => { if (confirm(`Delete "${cat.name}"? This can't be undone.`)) onDeleteCategory(cat.id) }}
             aria-label={`Delete ${cat.name}`}
-            className="ml-2 opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all shrink-0">
+            className="ml-1.5 sm:ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all shrink-0">
             <Trash2 size={12} />
           </button>
         </div>

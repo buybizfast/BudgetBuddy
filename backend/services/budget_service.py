@@ -17,10 +17,10 @@ _DEFAULT_GROUPS = [
     ("Giving", ["Tithing", "Charitable Giving"]),
     ("Savings", ["Emergency Fund", "Retirement", "College Fund", "Other Savings"]),
     ("Housing", ["Mortgage/Rent", "Electricity", "Water", "Natural Gas", "Internet", "Cable/Streaming", "Phone"]),
-    ("Food", ["Groceries", "Restaurants", "Coffee Shops"]),
+    ("Food", ["Groceries", "Restaurants", "Coffee Shops", "Breakfast", "Lunch", "Dinner", "Snacks", "Wraps"]),
     ("Transportation", ["Gas", "Car Payment", "Insurance", "Repairs & Maintenance", "Parking/Tolls", "Public Transit"]),
     ("Personal", ["Clothing", "Hair/Beauty", "Gym/Fitness", "Medical/Dental", "Subscriptions"]),
-    ("Lifestyle", ["Entertainment", "Vacation", "Hobbies", "Gifts", "Pet Care"]),
+    ("Lifestyle", ["Entertainment", "Vacation", "Hobbies", "Gifts", "Pet Care", "Alcohol", "Cannabis"]),
     ("Insurance & Tax", ["Life Insurance", "Health Insurance", "Home/Renters Insurance", "Taxes"]),
     ("Debt", ["Credit Card 1", "Student Loan", "Other Debt"]),
 ]
