@@ -32,8 +32,8 @@ BUDGET_SYNC_INTERVAL_SECS = int(os.getenv("BUDGET_SYNC_INTERVAL_SECS", "900"))
 AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
 AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "budgetbuddy")
 
-# Weekly digest email (Resend). All three must be set for the digest to send:
-# RESEND_API_KEY from resend.com, DIGEST_EMAIL is the recipient inbox.
+# Weekly digest email (Resend). Each user's digest goes to their own account
+# email, so only the API key and sender address are configured here.
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "BudgetBuddy <onboarding@resend.dev>")
 # Which email address inherits the data that existed before multi-user
