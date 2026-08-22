@@ -21,13 +21,14 @@ def _alert(severity: str, title: str, detail: str, href: str) -> dict:
     return {"severity": severity, "title": title, "detail": detail, "href": href}
 
 
-async def get_proactive_alerts(db: AsyncSession) -> list[dict]:
+async def get_proactive_alerts(user_id: str, db: AsyncSession) -> list[dict]:
     today = date.today()
     alerts: list[dict] = []
 
     # --- Credit utilization ------------------------------------------------
     result = await db.execute(
         select(DebtAccount).where(
+            DebtAccount.user_id == user_id,
             DebtAccount.account_type == "credit_card",
             DebtAccount.is_paid_off == False,  # noqa: E712
             DebtAccount.credit_limit.isnot(None),
@@ -54,7 +55,7 @@ async def get_proactive_alerts(db: AsyncSession) -> list[dict]:
 
     # --- Budget pace -------------------------------------------------------
     try:
-        budget = await get_budget_month_with_spending(today.year, today.month, db)
+        budget = await get_budget_month_with_spending(user_id, today.year, today.month, db)
     except Exception:
         budget = {}
     days_in_month = calendar.monthrange(today.year, today.month)[1]
@@ -93,6 +94,7 @@ async def get_proactive_alerts(db: AsyncSession) -> list[dict]:
     window_start = today - timedelta(days=5)
     result = await db.execute(
         select(Transaction).where(
+            Transaction.user_id == user_id,
             Transaction.date >= window_start,
             Transaction.amount > 0,
         )
@@ -114,7 +116,7 @@ async def get_proactive_alerts(db: AsyncSession) -> list[dict]:
     # --- Rising spending trends -------------------------------------------
     try:
         from backend.services.analytics_service import category_trends
-        trends = await category_trends(4, db)
+        trends = await category_trends(user_id, 4, db)
         risers = [t for t in trends if t["rising_streak"] >= 2 and t["current"] >= 50]
         risers.sort(key=lambda t: t["current"], reverse=True)
         for t in risers[:2]:
@@ -129,7 +131,7 @@ async def get_proactive_alerts(db: AsyncSession) -> list[dict]:
     # --- Projected negative balance ---------------------------------------
     try:
         from api.routes.cashflow import get_forecast
-        forecast = await get_forecast(days=30, db=db)
+        forecast = await get_forecast(days=30, user_id=user_id, db=db)
         if forecast["first_negative_date"]:
             neg = date.fromisoformat(forecast["first_negative_date"])
             alerts.append(_alert(

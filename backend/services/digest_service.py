@@ -8,8 +8,8 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import RESEND_API_KEY, RESEND_FROM_EMAIL, DIGEST_EMAIL
-from backend.db.models import AppState, DebtAccount, Transaction
+from backend.config import RESEND_API_KEY, RESEND_FROM_EMAIL
+from backend.db.models import AppState, DebtAccount, Transaction, User
 
 log = logging.getLogger("services.digest")
 
@@ -18,8 +18,8 @@ def _fmt(n: float) -> str:
     return f"${n:,.2f}"
 
 
-async def build_digest(db: AsyncSession) -> tuple[str, str]:
-    """Return (subject, html) for this week's digest."""
+async def build_digest(user_id: str, db: AsyncSession) -> tuple[str, str]:
+    """Return (subject, html) for this week's digest for one user."""
     from api.routes.bills import get_upcoming_unpaid
     from api.routes.safe_to_spend import get_safe_to_spend
 
@@ -28,6 +28,7 @@ async def build_digest(db: AsyncSession) -> tuple[str, str]:
 
     txn_result = await db.execute(
         select(Transaction).where(
+            Transaction.user_id == user_id,
             Transaction.date >= week_ago, Transaction.date < today,
             Transaction.pending == False,  # noqa: E712
         )
@@ -46,12 +47,12 @@ async def build_digest(db: AsyncSession) -> tuple[str, str]:
         by_merchant[name] = by_merchant.get(name, 0) + amt
     top_merchants = sorted(by_merchant.items(), key=lambda kv: kv[1], reverse=True)[:5]
 
-    bills = await get_upcoming_unpaid(days_ahead=7, db=db)
+    bills = await get_upcoming_unpaid(days_ahead=7, user_id=user_id, db=db)
     bills_total = sum(b["amount"] for b in bills)
 
-    sts = await get_safe_to_spend(db=db)
+    sts = await get_safe_to_spend(user_id=user_id, db=db)
 
-    debt_result = await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False))  # noqa: E712
+    debt_result = await db.execute(select(DebtAccount).where(DebtAccount.user_id == user_id, DebtAccount.is_paid_off == False))  # noqa: E712
     total_debt = sum(float(d.balance) for d in debt_result.scalars().all())
 
     subject = f"Your week: {_fmt(spent)} spent · {len(bills)} bill{'s' if len(bills) != 1 else ''} coming up"
@@ -114,26 +115,33 @@ async def build_digest(db: AsyncSession) -> tuple[str, str]:
     return subject, html
 
 
-async def send_weekly_digest(db: AsyncSession) -> bool:
-    """Build and send the digest. Returns True if actually sent."""
-    if not RESEND_API_KEY or not DIGEST_EMAIL:
-        log.info("Digest skipped — RESEND_API_KEY or DIGEST_EMAIL not set")
+async def send_weekly_digest(user_id: str, db: AsyncSession) -> bool:
+    """Build and send one user's digest to their own account email.
+    Returns True if actually sent."""
+    if not RESEND_API_KEY:
+        log.info("Digest skipped — RESEND_API_KEY not set")
         return False
 
-    subject, html = await build_digest(db)
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or not user.email:
+        log.info("Digest skipped — no email on record for user %s", user_id)
+        return False
+
+    subject, html = await build_digest(user_id, db)
     try:
         import resend
         resend.api_key = RESEND_API_KEY
         resend.Emails.send({
             "from": RESEND_FROM_EMAIL,
-            "to": [DIGEST_EMAIL],
+            "to": [user.email],
             "subject": subject,
             "html": html,
         })
-        log.info("Weekly digest sent to %s", DIGEST_EMAIL)
+        log.info("Weekly digest sent to %s", user.email)
         return True
     except Exception as exc:
-        log.error("Failed to send weekly digest: %s", exc)
+        log.error("Failed to send weekly digest to %s: %s", user.email, exc)
         return False
 
 
@@ -143,23 +151,30 @@ def _iso_week(d: date) -> str:
 
 
 async def maybe_send_weekly_digest(db: AsyncSession) -> None:
-    """Send the digest if it's Monday (13:00 UTC or later ≈ morning in the US)
-    and this ISO week's digest hasn't been sent yet. Safe to call repeatedly."""
+    """Send every user their digest if it's Monday (13:00 UTC or later ≈
+    morning in the US) and this ISO week's run hasn't happened yet. Safe to
+    call repeatedly — the per-user AppState key dedupes within the week, so a
+    restart mid-run resumes rather than re-emailing people already sent."""
     now = datetime.utcnow()
     if now.weekday() != 0 or now.hour < 13:
         return
-
-    week = _iso_week(now.date())
-    result = await db.execute(select(AppState).where(AppState.key == "digest_last_sent_week"))
-    state = result.scalar_one_or_none()
-    if state and state.value == week:
+    if not RESEND_API_KEY:
         return
 
-    if await send_weekly_digest(db):
-        if state is None:
-            state = AppState(key="digest_last_sent_week", value=week)
-            db.add(state)
-        else:
-            state.value = week
-            state.updated_at = datetime.utcnow()
-        await db.commit()
+    week = _iso_week(now.date())
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+
+    for user in users:
+        key = f"digest_last_sent_week:{user.id}"
+        state_result = await db.execute(select(AppState).where(AppState.key == key))
+        state = state_result.scalar_one_or_none()
+        if state and state.value == week:
+            continue
+        if await send_weekly_digest(user.id, db):
+            if state is None:
+                db.add(AppState(key=key, value=week))
+            else:
+                state.value = week
+                state.updated_at = datetime.utcnow()
+            await db.commit()

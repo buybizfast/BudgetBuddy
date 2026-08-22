@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import BankAccount, Paycheck
 from api.routes.bills import get_upcoming_unpaid
@@ -20,14 +21,14 @@ router = APIRouter(prefix="/api/v1/safe-to-spend", tags=["safe-to-spend"])
 
 
 @router.get("/")
-async def get_safe_to_spend(db: AsyncSession = Depends(get_session)):
+async def get_safe_to_spend(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     today = date.today()
 
     # Cash on hand: active checking/savings/cash accounts. "available" is the
     # live figure (excludes pending holds); fall back to current when the bank
     # doesn't report it.
     result = await db.execute(
-        select(BankAccount).where(BankAccount.is_active == True, BankAccount.type == "depository")  # noqa: E712
+        select(BankAccount).where(BankAccount.user_id == user_id, BankAccount.is_active == True, BankAccount.type == "depository")  # noqa: E712
     )
     accounts = result.scalars().all()
     cash = 0.0
@@ -38,7 +39,7 @@ async def get_safe_to_spend(db: AsyncSession = Depends(get_session)):
     # Horizon: the next paycheck date, else 30 days out. Bills due after the
     # next paycheck can be covered by that paycheck, so they don't reduce
     # what's safe to spend today.
-    result = await db.execute(select(Paycheck).where(Paycheck.active == True))  # noqa: E712
+    result = await db.execute(select(Paycheck).where(Paycheck.user_id == user_id, Paycheck.active == True))  # noqa: E712
     next_paycheck: date | None = None
     for p in result.scalars().all():
         d = p.next_date
@@ -53,7 +54,7 @@ async def get_safe_to_spend(db: AsyncSession = Depends(get_session)):
     horizon_days = (next_paycheck - today).days if next_paycheck else 30
     horizon_days = max(1, min(30, horizon_days))
 
-    bills = await get_upcoming_unpaid(days_ahead=horizon_days, db=db)
+    bills = await get_upcoming_unpaid(days_ahead=horizon_days, user_id=user_id, db=db)
     bills_total = sum(b["amount"] for b in bills)
 
     safe = cash - bills_total

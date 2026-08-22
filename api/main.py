@@ -30,7 +30,7 @@ from api.routes import digest as digest_router
 from api.routes import insights as insights_router
 from api.routes import cashflow as cashflow_router
 from api.ws_manager import ws_manager
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from backend.db.base import engine, session_scope
 from backend.db.models import Base
@@ -70,6 +70,61 @@ _SCHEMA_PATCHES = [
     "    ALTER TABLE debt_accounts ADD CONSTRAINT debt_accounts_bank_account_id_key UNIQUE (bank_account_id); "
     "  END IF; "
     "END $$",
+
+    # --- Multi-user migration ---------------------------------------------
+    # user_id columns added nullable (Postgres can't add NOT NULL to a
+    # populated table without a default); _MULTI_USER_POST_PATCHES sets
+    # NOT NULL after bootstrap_users() backfills every pre-existing row.
+    "ALTER TABLE plaid_items ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE budget_months ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE budget_categories ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE debt_accounts ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE bill_payments ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE paychecks ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE net_worth_snapshots ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE spending_alerts ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+
+    # Old single-tenant unique constraints conflict with per-user data —
+    # replace with user-scoped ones.
+    "ALTER TABLE user_subscriptions DROP CONSTRAINT IF EXISTS user_subscriptions_merchant_name_key",
+    "DO $$ BEGIN "
+    "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_user_subscription_user_merchant') THEN "
+    "    ALTER TABLE user_subscriptions ADD CONSTRAINT uq_user_subscription_user_merchant UNIQUE (user_id, merchant_name); "
+    "  END IF; "
+    "END $$",
+    "ALTER TABLE bill_payments DROP CONSTRAINT IF EXISTS uq_bill_payment_merchant_month",
+    "DO $$ BEGIN "
+    "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_bill_payment_user_merchant_month') THEN "
+    "    ALTER TABLE bill_payments ADD CONSTRAINT uq_bill_payment_user_merchant_month UNIQUE (user_id, merchant_name, year, month); "
+    "  END IF; "
+    "END $$",
+    "ALTER TABLE net_worth_snapshots DROP CONSTRAINT IF EXISTS uq_net_worth_snapshot_ym",
+    "DO $$ BEGIN "
+    "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_net_worth_snapshot_user_ym') THEN "
+    "    ALTER TABLE net_worth_snapshots ADD CONSTRAINT uq_net_worth_snapshot_user_ym UNIQUE (user_id, year, month); "
+    "  END IF; "
+    "END $$",
+    "DO $$ BEGIN "
+    "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_budget_month_user_ym') THEN "
+    "    ALTER TABLE budget_months ADD CONSTRAINT uq_budget_month_user_ym UNIQUE (user_id, year, month); "
+    "  END IF; "
+    "END $$",
+]
+
+# Applied after bootstrap_users() has backfilled user_id on every
+# pre-existing row — safe to enforce NOT NULL at that point.
+_MULTI_USER_NOT_NULL_PATCHES = [
+    f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL"
+    for table in (
+        "plaid_items", "bank_accounts", "transactions", "budget_months",
+        "budget_categories", "debt_accounts", "savings_goals",
+        "user_subscriptions", "bill_payments", "paychecks",
+        "net_worth_snapshots", "spending_alerts",
+    )
 ]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -77,6 +132,48 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 log = logging.getLogger("api.main")
+
+_OWNED_TABLES = (
+    "plaid_items", "bank_accounts", "transactions", "budget_months",
+    "budget_categories", "debt_accounts", "savings_goals",
+    "user_subscriptions", "bill_payments", "paychecks",
+    "net_worth_snapshots", "spending_alerts",
+)
+
+
+async def has_unclaimed_data(db) -> bool:
+    """True if rows exist from before multi-user that no account owns yet."""
+    for table in _OWNED_TABLES:
+        result = await db.execute(text(f"SELECT 1 FROM {table} WHERE user_id IS NULL LIMIT 1"))
+        if result.first() is not None:
+            return True
+    return False
+
+
+async def claim_legacy_data(user_id: str, db) -> int:
+    """Assign every pre-multi-user row to this account.
+
+    Deriving a bootstrap account from AUTH_USERNAME/AUTH_PASSWORD (the
+    previous approach) stranded the data behind credentials that no longer
+    matched what was in the environment. Instead the data sits unowned until
+    a real account claims it at signup, so the owner always knows the
+    password — they just chose it."""
+    claimed = 0
+    for table in _OWNED_TABLES:
+        result = await db.execute(
+            text(f"UPDATE {table} SET user_id = :uid WHERE user_id IS NULL"), {"uid": user_id}
+        )
+        claimed += result.rowcount or 0
+    await db.commit()
+    log.info("Claimed %d pre-existing rows for user %s", claimed, user_id)
+    # Now that nothing is unowned, the NOT NULL constraints can finally apply.
+    for stmt in _MULTI_USER_NOT_NULL_PATCHES:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(stmt))
+        except Exception as exc:
+            log.warning("Deferred NOT NULL patch failed (%s): %s", stmt[:60], exc)
+    return claimed
 
 
 @asynccontextmanager
@@ -92,6 +189,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 await conn.execute(text(stmt))
         except Exception as exc:
             log.error("Schema patch failed (%s): %s", stmt[:80], exc)
+    # NOT NULL on user_id can only apply once nothing is unowned. On a fresh
+    # database that's immediately true; on an upgrade it stays deferred until
+    # claim_legacy_data() runs at the owner's signup, which re-applies these.
+    try:
+        async with session_scope() as db:
+            unclaimed = await has_unclaimed_data(db)
+    except Exception as exc:
+        log.error("Unclaimed-data check failed: %s", exc)
+        unclaimed = True
+    if unclaimed:
+        log.info("Pre-multi-user data is unowned — the first account to sign up will claim it")
+    else:
+        for stmt in _MULTI_USER_NOT_NULL_PATCHES:
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(text(stmt))
+            except Exception as exc:
+                log.error("Schema patch failed (%s): %s", stmt[:80], exc)
     log.info("Database tables created/verified")
 
     async def budget_sync_loop() -> None:
@@ -106,11 +221,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # whenever the process happened to start.
             await asyncio.sleep(BUDGET_SYNC_INTERVAL_SECS - (time.time() % BUDGET_SYNC_INTERVAL_SECS))
             try:
+                from backend.db.models import PlaidItem
                 async with session_scope() as db:
-                    summary = await refresh_all_items(db)
-                if summary["total_added"] > 0:
-                    await ws_manager.broadcast_budget_update(summary["total_added"], summary["new_transactions"])
-                    log.info("Budget sync: %d new transactions broadcast", summary["total_added"])
+                    result = await db.execute(select(PlaidItem.user_id).where(PlaidItem.status == "active").distinct())
+                    user_ids = [row[0] for row in result.all()]
+                    for uid in user_ids:
+                        summary = await refresh_all_items(db, uid)
+                        if summary["total_added"] > 0:
+                            await ws_manager.broadcast_budget_update(summary["total_added"], summary["new_transactions"], uid)
+                            log.info("Budget sync: %d new transactions broadcast for user %s", summary["total_added"], uid)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

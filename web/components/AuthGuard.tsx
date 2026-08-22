@@ -9,7 +9,8 @@ const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const isLogin = pathname === '/login'
+  const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password']
+  const isLogin = PUBLIC_PATHS.includes(pathname)
   const hasToken = Boolean(getToken())
 
   // Optimistically show content if token exists; validate in background

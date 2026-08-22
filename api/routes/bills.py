@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import BillPayment
 from api.routes.subscriptions import get_merged_subscriptions
@@ -17,9 +18,9 @@ router = APIRouter(prefix="/api/v1/bills", tags=["bills"])
 
 
 @router.get("/paid")
-async def get_paid_bills(year: int = Query(...), month: int = Query(...), db: AsyncSession = Depends(get_session)):
+async def get_paid_bills(year: int = Query(...), month: int = Query(...), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     result = await db.execute(
-        select(BillPayment).where(and_(BillPayment.year == year, BillPayment.month == month))
+        select(BillPayment).where(and_(BillPayment.user_id == user_id, BillPayment.year == year, BillPayment.month == month))
     )
     payments = result.scalars().all()
     return [
@@ -42,10 +43,11 @@ class MarkPaidRequest(BaseModel):
 
 
 @router.post("/paid")
-async def mark_paid(body: MarkPaidRequest, db: AsyncSession = Depends(get_session)):
+async def mark_paid(body: MarkPaidRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     result = await db.execute(
         select(BillPayment).where(
             and_(
+                BillPayment.user_id == user_id,
                 BillPayment.merchant_name == body.merchant_name,
                 BillPayment.year == body.year,
                 BillPayment.month == body.month,
@@ -60,6 +62,7 @@ async def mark_paid(body: MarkPaidRequest, db: AsyncSession = Depends(get_sessio
         payment.updated_at = datetime.utcnow()
     else:
         payment = BillPayment(
+            user_id=user_id,
             merchant_name=body.merchant_name,
             year=body.year,
             month=body.month,
@@ -73,7 +76,7 @@ async def mark_paid(body: MarkPaidRequest, db: AsyncSession = Depends(get_sessio
 
 
 @router.get("/upcoming")
-async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=30), db: AsyncSession = Depends(get_session)):
+async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=30), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Return bills due in the next N days that haven't been marked paid. Sourced
     from the same merged subscription list as the Subscriptions page, so pausing,
     cancelling, hiding, or changing the cadence/amount of a subscription is
@@ -82,10 +85,10 @@ async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=30), d
     cutoff = today + timedelta(days=days_ahead)
     year, month = today.year, today.month
 
-    subs = await get_merged_subscriptions(db, months_back=6)
+    subs = await get_merged_subscriptions(user_id, db, months_back=6)
 
     result = await db.execute(
-        select(BillPayment).where(and_(BillPayment.year == year, BillPayment.month == month, BillPayment.paid == True))
+        select(BillPayment).where(and_(BillPayment.user_id == user_id, BillPayment.year == year, BillPayment.month == month, BillPayment.paid == True))
     )
     paid_merchants = {p.merchant_name for p in result.scalars().all()}
 
@@ -118,10 +121,11 @@ async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=30), d
 
 
 @router.delete("/paid")
-async def mark_unpaid(merchant_name: str = Query(...), year: int = Query(...), month: int = Query(...), db: AsyncSession = Depends(get_session)):
+async def mark_unpaid(merchant_name: str = Query(...), year: int = Query(...), month: int = Query(...), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     await db.execute(
         delete(BillPayment).where(
             and_(
+                BillPayment.user_id == user_id,
                 BillPayment.merchant_name == merchant_name,
                 BillPayment.year == year,
                 BillPayment.month == month,

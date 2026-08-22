@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db.models import Transaction, BudgetCategory, BudgetGroup, BudgetMonth
 
 
-async def monthly_group_trend(months: int, db: AsyncSession) -> list[dict[str, Any]]:
+async def monthly_group_trend(user_id: str, months: int, db: AsyncSession) -> list[dict[str, Any]]:
     today = date.today()
     results = []
     for i in range(months - 1, -1, -1):
@@ -26,7 +26,7 @@ async def monthly_group_trend(months: int, db: AsyncSession) -> list[dict[str, A
             select(BudgetGroup.name, func.sum(Transaction.amount))
             .join(BudgetCategory, Transaction.budget_category_id == BudgetCategory.id)
             .join(BudgetGroup, BudgetCategory.group_id == BudgetGroup.id)
-            .where(Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
+            .where(Transaction.user_id == user_id, Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
             .group_by(BudgetGroup.name)
         )
         group_totals = {name: float(total or 0) for name, total in rows}
@@ -35,35 +35,35 @@ async def monthly_group_trend(months: int, db: AsyncSession) -> list[dict[str, A
     return results
 
 
-async def top_merchants(year: int, month: int, limit: int, db: AsyncSession) -> list[dict[str, Any]]:
+async def top_merchants(user_id: str, year: int, month: int, limit: int, db: AsyncSession) -> list[dict[str, Any]]:
     start = date(year, month, 1)
     end = date(year, month, calendar.monthrange(year, month)[1])
     rows = await db.execute(
         select(func.coalesce(Transaction.merchant_name, Transaction.name).label("merchant"),
                func.sum(Transaction.amount).label("total"), func.count(Transaction.id).label("count"))
-        .where(Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
+        .where(Transaction.user_id == user_id, Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
         .group_by(func.coalesce(Transaction.merchant_name, Transaction.name))
         .order_by(func.sum(Transaction.amount).desc()).limit(limit)
     )
     return [{"merchant": m, "total": float(t or 0), "count": c} for m, t, c in rows]
 
 
-async def year_summary(year: int, db: AsyncSession) -> dict[str, Any]:
+async def year_summary(user_id: str, year: int, db: AsyncSession) -> dict[str, Any]:
     monthly = []
     for m in range(1, 13):
         start = date(year, m, 1)
         end = date(year, m, calendar.monthrange(year, m)[1])
         result = await db.execute(select(func.sum(Transaction.amount)).where(
-            Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0))
+            Transaction.user_id == user_id, Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0))
         total = float(result.scalar() or 0)
-        bm_result = await db.execute(select(BudgetMonth.total_income).where(BudgetMonth.year == year, BudgetMonth.month == m))
+        bm_result = await db.execute(select(BudgetMonth.total_income).where(BudgetMonth.user_id == user_id, BudgetMonth.year == year, BudgetMonth.month == m))
         income = float(bm_result.scalar() or 0)
         monthly.append({"month": m, "month_label": date(year, m, 1).strftime("%b"), "spent": total, "income": income})
     return {"year": year, "months": monthly, "total_spent": sum(m["spent"] for m in monthly),
             "total_income": sum(m["income"] for m in monthly)}
 
 
-async def category_trends(months: int, db: AsyncSession) -> list[dict[str, Any]]:
+async def category_trends(user_id: str, months: int, db: AsyncSession) -> list[dict[str, Any]]:
     """Month-over-month spending per category for the last N months, with the
     change of the latest full picture vs the average of the earlier months and
     how many consecutive months each category has risen."""
@@ -84,7 +84,8 @@ async def category_trends(months: int, db: AsyncSession) -> list[dict[str, Any]]
             select(BudgetGroup.name, BudgetCategory.name, func.sum(Transaction.amount))
             .join(BudgetCategory, Transaction.budget_category_id == BudgetCategory.id)
             .join(BudgetGroup, BudgetCategory.group_id == BudgetGroup.id)
-            .where(Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
+            .where(Transaction.user_id == user_id, Transaction.date >= start, Transaction.date <= end,
+                   Transaction.pending == False, Transaction.amount > 0)
             .group_by(BudgetGroup.name, BudgetCategory.name)
         )
         for group, cat, total in rows:
@@ -117,14 +118,14 @@ async def category_trends(months: int, db: AsyncSession) -> list[dict[str, Any]]
     return out
 
 
-async def category_breakdown(year: int, month: int, db: AsyncSession) -> list[dict[str, Any]]:
+async def category_breakdown(user_id: str, year: int, month: int, db: AsyncSession) -> list[dict[str, Any]]:
     start = date(year, month, 1)
     end = date(year, month, calendar.monthrange(year, month)[1])
     rows = await db.execute(
         select(BudgetCategory.name, BudgetGroup.name.label("group_name"), func.sum(Transaction.amount).label("total"))
         .join(BudgetCategory, Transaction.budget_category_id == BudgetCategory.id)
         .join(BudgetGroup, BudgetCategory.group_id == BudgetGroup.id)
-        .where(Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
+        .where(Transaction.user_id == user_id, Transaction.date >= start, Transaction.date <= end, Transaction.pending == False, Transaction.amount > 0)
         .group_by(BudgetCategory.name, BudgetGroup.name)
         .order_by(func.sum(Transaction.amount).desc())
     )

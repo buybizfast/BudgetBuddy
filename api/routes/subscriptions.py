@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import UserSubscription
 from backend.services.recurring_service import detect_recurring
@@ -68,16 +69,16 @@ def _manual_to_dict(sub: UserSubscription) -> dict:
     }
 
 
-async def get_merged_subscriptions(db: AsyncSession, months_back: int = 6) -> list[dict]:
+async def get_merged_subscriptions(user_id: str, db: AsyncSession, months_back: int = 6) -> list[dict]:
     """Detected recurring transactions merged with user overrides (status, notes,
     cadence), plus manually-added subscriptions — with hidden/removed entries
     excluded. This is the single source of truth for "what is a live subscription
     right now" — anything that reads subscriptions/bills should go through this so
     edits (cadence changes, pauses, deletes, manual additions) are reflected
     everywhere consistently, not just on the subscriptions page."""
-    detected = await detect_recurring(db, months_back)
+    detected = await detect_recurring(user_id, db, months_back)
 
-    result = await db.execute(select(UserSubscription))
+    result = await db.execute(select(UserSubscription).where(UserSubscription.user_id == user_id))
     overrides: dict[str, UserSubscription] = {u.merchant_name: u for u in result.scalars().all()}
 
     out = []
@@ -103,8 +104,8 @@ async def get_merged_subscriptions(db: AsyncSession, months_back: int = 6) -> li
 
 
 @router.get("/")
-async def list_subscriptions(months_back: int = 6, db: AsyncSession = Depends(get_session)):
-    return await get_merged_subscriptions(db, months_back)
+async def list_subscriptions(months_back: int = 6, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    return await get_merged_subscriptions(user_id, db, months_back)
 
 
 class SubscriptionCreate(BaseModel):
@@ -116,7 +117,7 @@ class SubscriptionCreate(BaseModel):
 
 
 @router.post("/")
-async def create_subscription(body: SubscriptionCreate, db: AsyncSession = Depends(get_session)):
+async def create_subscription(body: SubscriptionCreate, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Manually add a subscription that recurring detection wouldn't otherwise find."""
     if body.cadence not in _CADENCE_DAYS:
         raise HTTPException(status_code=400, detail=f"cadence must be one of {list(_CADENCE_DAYS)}")
@@ -124,10 +125,10 @@ async def create_subscription(body: SubscriptionCreate, db: AsyncSession = Depen
     if not merchant:
         raise HTTPException(status_code=400, detail="merchant is required")
 
-    result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant))
+    result = await db.execute(select(UserSubscription).where(UserSubscription.user_id == user_id, UserSubscription.merchant_name == merchant))
     sub = result.scalar_one_or_none()
     if sub is None:
-        sub = UserSubscription(merchant_name=merchant)
+        sub = UserSubscription(user_id=user_id, merchant_name=merchant)
         db.add(sub)
     sub.is_manual = True
     sub.hidden = False
@@ -144,14 +145,14 @@ async def create_subscription(body: SubscriptionCreate, db: AsyncSession = Depen
 
 
 @router.patch("/{merchant_name:path}")
-async def update_subscription(merchant_name: str, body: SubscriptionUpdate, db: AsyncSession = Depends(get_session)):
+async def update_subscription(merchant_name: str, body: SubscriptionUpdate, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Create or update the user's status/notes/cadence override for a subscription."""
     if body.cadence is not None and body.cadence not in _CADENCE_DAYS:
         raise HTTPException(status_code=400, detail=f"cadence must be one of {list(_CADENCE_DAYS)}")
-    result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant_name))
+    result = await db.execute(select(UserSubscription).where(UserSubscription.user_id == user_id, UserSubscription.merchant_name == merchant_name))
     sub = result.scalar_one_or_none()
     if sub is None:
-        sub = UserSubscription(merchant_name=merchant_name)
+        sub = UserSubscription(user_id=user_id, merchant_name=merchant_name)
         db.add(sub)
     if body.status is not None:
         sub.status = body.status
@@ -171,13 +172,13 @@ async def update_subscription(merchant_name: str, body: SubscriptionUpdate, db: 
 
 
 @router.delete("/{merchant_name:path}")
-async def remove_subscription(merchant_name: str, db: AsyncSession = Depends(get_session)):
+async def remove_subscription(merchant_name: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Remove a subscription by hiding it — this keeps it recoverable via the
     'recently deleted' list instead of losing the record outright."""
-    result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant_name))
+    result = await db.execute(select(UserSubscription).where(UserSubscription.user_id == user_id, UserSubscription.merchant_name == merchant_name))
     sub = result.scalar_one_or_none()
     if sub is None:
-        sub = UserSubscription(merchant_name=merchant_name)
+        sub = UserSubscription(user_id=user_id, merchant_name=merchant_name)
         db.add(sub)
     sub.hidden = True
     sub.updated_at = datetime.utcnow()
@@ -186,12 +187,12 @@ async def remove_subscription(merchant_name: str, db: AsyncSession = Depends(get
 
 
 @router.get("/deleted")
-async def list_deleted_subscriptions(months_back: int = 6, db: AsyncSession = Depends(get_session)):
+async def list_deleted_subscriptions(months_back: int = 6, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Return subscriptions the user has removed, so they can be restored."""
-    detected = await detect_recurring(db, months_back)
+    detected = await detect_recurring(user_id, db, months_back)
     detected_by_merchant = {item["merchant"]: item for item in detected}
 
-    result = await db.execute(select(UserSubscription).where(UserSubscription.hidden == True))  # noqa: E712
+    result = await db.execute(select(UserSubscription).where(UserSubscription.user_id == user_id, UserSubscription.hidden == True))  # noqa: E712
     hidden = result.scalars().all()
 
     out = []
@@ -207,9 +208,9 @@ async def list_deleted_subscriptions(months_back: int = 6, db: AsyncSession = De
 
 
 @router.post("/{merchant_name:path}/restore")
-async def restore_subscription(merchant_name: str, db: AsyncSession = Depends(get_session)):
+async def restore_subscription(merchant_name: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Unhide a previously-removed subscription."""
-    result = await db.execute(select(UserSubscription).where(UserSubscription.merchant_name == merchant_name))
+    result = await db.execute(select(UserSubscription).where(UserSubscription.user_id == user_id, UserSubscription.merchant_name == merchant_name))
     sub = result.scalar_one_or_none()
     if sub is None or not sub.hidden:
         raise HTTPException(status_code=404, detail="No deleted subscription found for that merchant")

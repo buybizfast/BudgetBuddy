@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import BankAccount
 from api.routes.bills import get_upcoming_unpaid
@@ -22,19 +23,19 @@ router = APIRouter(prefix="/api/v1/cashflow", tags=["cashflow"])
 
 
 @router.get("/forecast")
-async def get_forecast(days: int = Query(default=30, ge=7, le=30), db: AsyncSession = Depends(get_session)):
+async def get_forecast(days: int = Query(default=30, ge=7, le=30), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     today = date.today()
 
     result = await db.execute(
-        select(BankAccount).where(BankAccount.is_active == True, BankAccount.type == "depository")  # noqa: E712
+        select(BankAccount).where(BankAccount.user_id == user_id, BankAccount.is_active == True, BankAccount.type == "depository")  # noqa: E712
     )
     cash = 0.0
     for a in result.scalars().all():
         bal = a.available_balance if a.available_balance is not None else a.current_balance
         cash += float(bal or 0)
 
-    bills = await get_upcoming_unpaid(days_ahead=days, db=db)
-    paychecks = await get_upcoming_paychecks(days_ahead=days, db=db)
+    bills = await get_upcoming_unpaid(days_ahead=days, user_id=user_id, db=db)
+    paychecks = await get_upcoming_paychecks(days_ahead=days, user_id=user_id, db=db)
 
     by_day: dict[str, dict] = {}
     for offset in range(days + 1):

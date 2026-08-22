@@ -14,6 +14,7 @@ _limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import get_current_user
 from backend.config import ANTHROPIC_API_KEY
 from backend.db.base import get_session
 from backend.db.models import BankAccount, DebtAccount, SavingsGoal, Transaction
@@ -46,26 +47,26 @@ funds until Baby Step 4
 """
 
 
-async def _load_data(db: AsyncSession) -> dict:
+async def _load_data(user_id: str, db: AsyncSession) -> dict:
     now = date.today()
     year, month = now.year, now.month
 
     try:
-        budget = await get_budget_month_with_spending(year, month, db)
+        budget = await get_budget_month_with_spending(user_id, year, month, db)
     except Exception:
         budget = {}
 
-    debts_result = await db.execute(select(DebtAccount).where(DebtAccount.is_paid_off == False).order_by(DebtAccount.balance))
+    debts_result = await db.execute(select(DebtAccount).where(DebtAccount.user_id == user_id, DebtAccount.is_paid_off == False).order_by(DebtAccount.balance))
     debts = debts_result.scalars().all()
 
-    goals_result = await db.execute(select(SavingsGoal))
+    goals_result = await db.execute(select(SavingsGoal).where(SavingsGoal.user_id == user_id))
     goals = goals_result.scalars().all()
 
     start = date(year, month, 1)
     end = date(year, month, calendar.monthrange(year, month)[1])
     txn_result = await db.execute(
         select(Transaction)
-        .where(Transaction.date >= start, Transaction.date <= end, Transaction.pending == False)
+        .where(Transaction.user_id == user_id, Transaction.date >= start, Transaction.date <= end, Transaction.pending == False)
     )
     txns = txn_result.scalars().all()
 
@@ -152,11 +153,11 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 @_limiter.limit("30/minute")
-async def chat(request: Request, body: ChatRequest, db: AsyncSession = Depends(get_session)):
+async def chat(request: Request, body: ChatRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=503, detail="AI coach is not configured. Set ANTHROPIC_API_KEY in your environment.")
 
-    data = await _load_data(db)
+    data = await _load_data(user_id, db)
     context = _build_context(data)
 
     # Build conversation history for multi-turn support
