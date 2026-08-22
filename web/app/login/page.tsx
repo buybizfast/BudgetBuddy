@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PiggyBank } from 'lucide-react'
 import { setToken } from '@/lib/auth'
+import { PasswordInput } from '@/components/PasswordInput'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -33,7 +34,7 @@ export default function LoginPage() {
       setToken(access_token)
       router.push('/')
     } catch {
-      setError('Could not connect to server')
+      setError(`Could not reach the server at ${BASE}. It may be down, or NEXT_PUBLIC_API_URL may be misconfigured.`)
     } finally {
       setLoading(false)
     }
@@ -76,14 +77,12 @@ export default function LoginPage() {
               <label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
               <Link href="/forgot-password" className="text-xs text-blue-600 hover:text-blue-700 font-medium">Forgot password?</Link>
             </div>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
-              autoComplete="current-password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={setPassword}
+              autoComplete="current-password"
               required
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
             />
           </div>

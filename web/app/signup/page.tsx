@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PiggyBank } from 'lucide-react'
 import { setToken } from '@/lib/auth'
+import { PasswordInput } from '@/components/PasswordInput'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -40,7 +41,7 @@ export default function SignupPage() {
       setToken(access_token)
       router.push('/')
     } catch {
-      setError('Could not connect to server')
+      setError(`Could not reach the server at ${BASE}. It may be down, or NEXT_PUBLIC_API_URL may be misconfigured.`)
     } finally {
       setLoading(false)
     }
@@ -80,30 +81,26 @@ export default function SignupPage() {
 
           <div className="space-y-1">
             <label htmlFor="password" className="text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
-              autoComplete="new-password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={setPassword}
+              autoComplete="new-password"
               required
               minLength={8}
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="At least 8 characters"
             />
           </div>
 
           <div className="space-y-1">
             <label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 dark:text-gray-300">Confirm Password</label>
-            <input
+            <PasswordInput
               id="confirmPassword"
-              type="password"
-              autoComplete="new-password"
               value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
+              onChange={setConfirmPassword}
+              autoComplete="new-password"
               required
               minLength={8}
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
             />
           </div>
