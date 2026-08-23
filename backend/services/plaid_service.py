@@ -57,19 +57,34 @@ def _get_client():
 async def create_link_token(user_id: str) -> str:
     client = _get_client()
     kwargs: dict[str, Any] = dict(
-        # "liabilities" gives real minimum payment / interest rate / due dates
-        # for credit cards and loans via /liabilities/get — without it, synced
-        # debts only ever get a balance from /accounts/get.
-        products=[Products("transactions"), Products("liabilities")],
+        products=[Products("transactions")],
         client_name="Budget Buddy",
         country_codes=[CountryCode("US")],
         language="en",
         user=LinkTokenCreateRequestUser(client_user_id=user_id),
     )
+    # "liabilities" gives real minimum payment / interest rate / due dates for
+    # credit cards and loans via /liabilities/get. It's requested as OPTIONAL
+    # because a Plaid client not authorized for that product would otherwise
+    # fail link_token_create outright, making it impossible to connect (or
+    # reconnect) any bank at all.
+    try:
+        from plaid.model.products import Products as _P
+        kwargs["optional_products"] = [_P("liabilities")]
+    except Exception:
+        pass
     if PLAID_REDIRECT_URI:
         kwargs["redirect_uri"] = PLAID_REDIRECT_URI
-    request = LinkTokenCreateRequest(**kwargs)
-    response = client.link_token_create(request)
+    try:
+        request = LinkTokenCreateRequest(**kwargs)
+        response = client.link_token_create(request)
+    except Exception as exc:
+        # Older SDKs (and some client configs) reject optional_products —
+        # retry with the bare required product rather than blocking linking.
+        log.warning("link_token_create with optional_products failed (%s); retrying without", exc)
+        kwargs.pop("optional_products", None)
+        request = LinkTokenCreateRequest(**kwargs)
+        response = client.link_token_create(request)
     log.info("Created Plaid link token — request_id=%s", response.get("request_id"))
     return response["link_token"]
 
