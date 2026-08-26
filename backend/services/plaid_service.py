@@ -89,6 +89,31 @@ async def create_link_token(user_id: str) -> str:
     return response["link_token"]
 
 
+async def create_update_link_token(plaid_item: PlaidItem) -> str:
+    """Link token for UPDATE MODE — relaunches Link against an existing item so
+    the user can re-authorize (renewed consent, fixed credentials, MFA) without
+    the item being recreated. Deleting and re-adding a connection cascades away
+    its accounts and every transaction under them, so this is the correct repair
+    path for an expired or errored connection."""
+    client = _get_client()
+    kwargs: dict[str, Any] = dict(
+        client_name="Budget Buddy",
+        country_codes=[CountryCode("US")],
+        language="en",
+        user=LinkTokenCreateRequestUser(client_user_id=plaid_item.user_id),
+        # In update mode products must be omitted — Plaid reuses the item's
+        # existing product set — and access_token identifies the item.
+        access_token=plaid_item.access_token,
+    )
+    if PLAID_REDIRECT_URI:
+        kwargs["redirect_uri"] = PLAID_REDIRECT_URI
+    request = LinkTokenCreateRequest(**kwargs)
+    response = client.link_token_create(request)
+    log.info("Created Plaid update-mode link token for item %s — request_id=%s",
+             plaid_item.id, response.get("request_id"))
+    return response["link_token"]
+
+
 async def exchange_public_token(public_token: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
     client = _get_client()
     exchange_response = client.item_public_token_exchange(

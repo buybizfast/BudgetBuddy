@@ -23,6 +23,39 @@ async def get_link_token(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=503, detail=str(exc))
 
 
+@router.get("/items/{item_id}/update-token")
+async def get_update_link_token(item_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Link token for re-authorizing an existing connection in update mode."""
+    result = await db.execute(select(PlaidItem).where(PlaidItem.id == item_id, PlaidItem.user_id == user_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    try:
+        token = await plaid_service.create_update_link_token(item)
+        return {"link_token": token}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.post("/items/{item_id}/reauth-complete")
+async def reauth_complete(item_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Called after Link's update-mode flow succeeds. The access token is
+    unchanged by update mode, so there's nothing to exchange — just clear the
+    stored error and pull fresh data to confirm the repair worked."""
+    result = await db.execute(select(PlaidItem).where(PlaidItem.id == item_id, PlaidItem.user_id == user_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    item.last_sync_error = None
+    item.status = "active"
+    await db.commit()
+    try:
+        summary = await plaid_service.sync_transactions(str(item.id), db)
+        return {"status": "ok", "added": summary.get("added", 0)}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Reconnected, but the first sync failed: {exc}")
+
+
 class ExchangeTokenRequest(BaseModel):
     public_token: str
 

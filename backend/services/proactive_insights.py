@@ -53,6 +53,19 @@ async def get_proactive_alerts(user_id: str, db: AsyncSession) -> list[dict]:
                 "/debt",
             ))
 
+    # --- Broken bank connections ------------------------------------------
+    from backend.db.models import PlaidItem
+    result = await db.execute(
+        select(PlaidItem).where(PlaidItem.user_id == user_id, PlaidItem.last_sync_error.isnot(None))
+    )
+    for item in result.scalars().all():
+        alerts.append(_alert(
+            "alert", f"{item.institution_name or 'A bank'} needs reconnecting",
+            "Balances and transactions have stopped updating for this connection. "
+            "Reconnecting keeps your history — it takes about a minute.",
+            "/accounts",
+        ))
+
     # --- Budget pace -------------------------------------------------------
     try:
         budget = await get_budget_month_with_spending(user_id, today.year, today.month, db)
