@@ -270,7 +270,19 @@ app = FastAPI(title="Budget Buddy", description="Dave Ramsey-style zero-based bu
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+# allow_origin_regex covers every Vercel deployment of this frontend —
+# production plus the per-commit preview URLs — so a missing or stale
+# CORS_ORIGINS can't silently break the browser with what looks like an
+# unreachable server. Explicit CORS_ORIGINS entries still apply on top.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip()],
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+log.info("CORS allowed origins: %s (+ *.vercel.app)", CORS_ORIGINS)
 
 app.include_router(auth_router.router)
 
