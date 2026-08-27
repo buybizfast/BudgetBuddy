@@ -8,8 +8,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,18 +17,30 @@ from backend.config import JWT_ALGORITHM, JWT_EXPIRE_MINUTES, JWT_SECRET
 from backend.db.base import get_session
 from backend.db.models import PasswordResetToken, User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
 
 RESET_TOKEN_EXPIRE_MINUTES = 30
 
+# bcrypt is used directly rather than through passlib: passlib 1.7.4 reads
+# bcrypt.__about__.__version__ during backend detection, which bcrypt removed
+# in 4.1, so hashing raises MissingBackendError on any modern bcrypt.
+
+
+def _pw_bytes(plain: str) -> bytes:
+    # bcrypt only considers the first 72 bytes and newer versions raise on
+    # longer input, so truncate explicitly.
+    return plain.encode("utf-8")[:72]
+
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(_pw_bytes(plain), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return bcrypt.hashpw(_pw_bytes(plain), bcrypt.gensalt()).decode("utf-8")
 
 
 def create_token(user_id: str) -> str:

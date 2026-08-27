@@ -270,6 +270,21 @@ app = FastAPI(title="Budget Buddy", description="Dave Ramsey-style zero-based bu
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+@app.middleware("http")
+async def surface_errors_with_cors(request: Request, call_next):
+    """Convert an unhandled exception into a JSON 500 *inside* the CORS
+    middleware, so the browser gets a readable error instead of a response
+    with no CORS headers — which it reports as an unreachable server, hiding
+    the real failure entirely."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        log.exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": f"Server error: {exc}"})
+
+
+# Added AFTER the error middleware so CORS ends up outermost and stamps its
+# headers onto that 500 response too.
 # allow_origin_regex covers every Vercel deployment of this frontend —
 # production plus the per-commit preview URLs — so a missing or stale
 # CORS_ORIGINS can't silently break the browser with what looks like an
