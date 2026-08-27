@@ -1,10 +1,11 @@
 'use client'
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PiggyBank } from 'lucide-react'
 import { setToken } from '@/lib/auth'
 import { PasswordInput } from '@/components/PasswordInput'
+import { GoogleSignInButton } from '@/components/GoogleSignInButton'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -14,6 +15,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`${BASE}/api/v1/auth/config`)
+      .then(r => r.json())
+      .then(d => setGoogleClientId(d?.google_client_id ?? null))
+      .catch(() => {})
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -94,6 +103,10 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
+
+          {googleClientId && (
+            <GoogleSignInButton clientId={googleClientId} onError={setError} />
+          )}
 
           <p className="text-center text-sm text-gray-500 dark:text-gray-400">
             Don't have an account?{' '}

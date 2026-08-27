@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { PiggyBank } from 'lucide-react'
 import { setToken } from '@/lib/auth'
 import { PasswordInput } from '@/components/PasswordInput'
+import { GoogleSignInButton } from '@/components/GoogleSignInButton'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -17,11 +18,12 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [inviteRequired, setInviteRequired] = useState(false)
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`${BASE}/api/v1/auth/config`)
       .then(r => r.json())
-      .then(d => setInviteRequired(Boolean(d?.invite_required)))
+      .then(d => { setInviteRequired(Boolean(d?.invite_required)); setGoogleClientId(d?.google_client_id ?? null) })
       .catch(() => {})
   }, [])
 
@@ -138,6 +140,10 @@ export default function SignupPage() {
           >
             {loading ? 'Creating account…' : 'Create account'}
           </button>
+
+          {googleClientId && (
+            <GoogleSignInButton clientId={googleClientId} inviteCode={inviteCode} onError={setError} />
+          )}
 
           <p className="text-center text-sm text-gray-500 dark:text-gray-400">
             Already have an account?{' '}

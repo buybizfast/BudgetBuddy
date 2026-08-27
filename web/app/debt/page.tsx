@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 
 import { apiFetch, BASE } from '@/lib/api'
+import { DayOfMonthPicker } from '@/components/DayOfMonthPicker'
 
 interface Debt {
   id: string; name: string; balance: number; original_balance: number; total_paid: number
@@ -350,17 +351,21 @@ export default function DebtPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Due Date (day of month)</label>
-                  <input type="number" min="1" max="31" value={addForm.due_date_day} onChange={e => setAddForm(f => ({...f, due_date_day: e.target.value}))}
-                    placeholder="e.g. 15"
-                    className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <label htmlFor="debt-due-date" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Due Date</label>
+                  <DayOfMonthPicker
+                    id="debt-due-date"
+                    value={addForm.due_date_day}
+                    onChange={v => setAddForm(f => ({...f, due_date_day: v}))}
+                  />
                 </div>
                 {addForm.account_type === 'credit_card' && (
                   <div>
-                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Statement Date (day of month)</label>
-                    <input type="number" min="1" max="31" value={addForm.statement_date_day} onChange={e => setAddForm(f => ({...f, statement_date_day: e.target.value}))}
-                      placeholder="e.g. 3"
-                      className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <label htmlFor="debt-statement-date" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Statement Date</label>
+                    <DayOfMonthPicker
+                      id="debt-statement-date"
+                      value={addForm.statement_date_day}
+                      onChange={v => setAddForm(f => ({...f, statement_date_day: v}))}
+                    />
                   </div>
                 )}
                 {addForm.account_type === 'bnpl' && (

@@ -36,6 +36,9 @@ RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "BudgetBuddy <onboarding@rese
 # Which email address inherits the data that existed before multi-user
 # accounts. Leave unset and the first account created claims it.
 OWNER_EMAIL = os.getenv("OWNER_EMAIL", "")
+# Google sign-in. The client id is also served to the frontend via
+# /auth/config so the browser can render Google's button.
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 # When set, signup requires this code — keeps the app closed to invitees.
 SIGNUP_INVITE_CODE = os.getenv("SIGNUP_INVITE_CODE", "")
 # Falls back to a random secret if unset, which invalidates all sessions

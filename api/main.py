@@ -113,6 +113,16 @@ _SCHEMA_PATCHES = [
     "    ALTER TABLE budget_months ADD CONSTRAINT uq_budget_month_user_ym UNIQUE (user_id, year, month); "
     "  END IF; "
     "END $$",
+
+    # --- Google sign-in ----------------------------------------------------
+    # Google accounts have no password, so the column must allow NULL.
+    "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(64)",
+    "DO $$ BEGIN "
+    "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_google_sub_key') THEN "
+    "    ALTER TABLE users ADD CONSTRAINT users_google_sub_key UNIQUE (google_sub); "
+    "  END IF; "
+    "END $$",
 ]
 
 # Applied once claim_legacy_data() has backfilled user_id on every

@@ -73,7 +73,11 @@ async def get_current_user(
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[User]:
     result = await db.execute(select(User).where(User.email == email.lower().strip()))
     user = result.scalar_one_or_none()
-    if user is None or not verify_password(password, user.password_hash):
+    # Google-only accounts have no password_hash — they can't be authenticated
+    # this way, and must not fall through to a hash comparison against None.
+    if user is None or not user.password_hash:
+        return None
+    if not verify_password(password, user.password_hash):
         return None
     return user
 

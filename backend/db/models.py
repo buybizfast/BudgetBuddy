@@ -22,7 +22,12 @@ class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    # Null for accounts created through Google — they authenticate via
+    # google_sub instead and have no password to verify.
+    password_hash = Column(String(255), nullable=True)
+    # Google's stable subject id. Preferred over email for matching, since a
+    # Google account's email can change while the subject never does.
+    google_sub = Column(String(64), unique=True, nullable=True, index=True)
     email_verified = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
