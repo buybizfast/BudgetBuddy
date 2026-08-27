@@ -72,9 +72,9 @@ _SCHEMA_PATCHES = [
     "END $$",
 
     # --- Multi-user migration ---------------------------------------------
-    # user_id columns added nullable (Postgres can't add NOT NULL to a
-    # populated table without a default); _MULTI_USER_POST_PATCHES sets
-    # NOT NULL after bootstrap_users() backfills every pre-existing row.
+    # user_id columns are added nullable (Postgres can't add NOT NULL to a
+    # populated table without a default). _MULTI_USER_NOT_NULL_PATCHES tightens
+    # them once claim_legacy_data() has given every pre-existing row an owner.
     "ALTER TABLE plaid_items ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
     "ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
     "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
@@ -115,8 +115,8 @@ _SCHEMA_PATCHES = [
     "END $$",
 ]
 
-# Applied after bootstrap_users() has backfilled user_id on every
-# pre-existing row — safe to enforce NOT NULL at that point.
+# Applied once claim_legacy_data() has backfilled user_id on every
+# pre-existing row — only safe to enforce NOT NULL at that point.
 _MULTI_USER_NOT_NULL_PATCHES = [
     f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL"
     for table in (
@@ -153,11 +153,11 @@ async def has_unclaimed_data(db) -> bool:
 async def claim_legacy_data(user_id: str, db) -> int:
     """Assign every pre-multi-user row to this account.
 
-    Deriving a bootstrap account from AUTH_USERNAME/AUTH_PASSWORD (the
-    previous approach) stranded the data behind credentials that no longer
-    matched what was in the environment. Instead the data sits unowned until
-    a real account claims it at signup, so the owner always knows the
-    password — they just chose it."""
+    Minting a bootstrap account from environment credentials (the previous
+    approach) stranded the data behind a password that no longer matched what
+    was in the environment. Instead the data sits unowned until a real account
+    claims it at signup, so the owner always knows the password — they chose
+    it themselves."""
     claimed = 0
     for table in _OWNED_TABLES:
         result = await db.execute(

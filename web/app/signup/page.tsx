@@ -1,5 +1,5 @@
 'use client'
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PiggyBank } from 'lucide-react'
@@ -16,6 +16,14 @@ export default function SignupPage() {
   const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [inviteRequired, setInviteRequired] = useState(false)
+
+  useEffect(() => {
+    fetch(`${BASE}/api/v1/auth/config`)
+      .then(r => r.json())
+      .then(d => setInviteRequired(Boolean(d?.invite_required)))
+      .catch(() => {})
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -107,15 +115,19 @@ export default function SignupPage() {
 
           <div className="space-y-1">
             <label htmlFor="inviteCode" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Invite code <span className="text-gray-400 font-normal">(if you were given one)</span>
+              Invite code{' '}
+              <span className="text-gray-400 font-normal">
+                {inviteRequired ? '(required)' : '(if you were given one)'}
+              </span>
             </label>
             <input
               id="inviteCode"
               type="text"
               value={inviteCode}
               onChange={e => setInviteCode(e.target.value)}
+              required={inviteRequired}
               className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Optional"
+              placeholder={inviteRequired ? 'Enter the code you were sent' : 'Optional'}
             />
           </div>
 

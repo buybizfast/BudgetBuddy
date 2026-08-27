@@ -56,6 +56,13 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+@router.get("/config")
+async def auth_config():
+    """Public signup requirements, so the form can label the invite-code field
+    accurately instead of guessing whether this deployment gates signup."""
+    return {"invite_required": bool(SIGNUP_INVITE_CODE)}
+
+
 @router.post("/signup", response_model=TokenResponse)
 @_limiter.limit("5/minute")
 async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depends(get_session)):

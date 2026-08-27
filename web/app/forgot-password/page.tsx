@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
       }
       setSent(true)
     } catch {
-      setError('Could not connect to server')
+      setError(`Could not reach the server at ${BASE}. It may be down, or NEXT_PUBLIC_API_URL may be misconfigured.`)
     } finally {
       setLoading(false)
     }
