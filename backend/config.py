@@ -36,6 +36,9 @@ RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "BudgetBuddy <onboarding@rese
 # Which email address inherits the data that existed before multi-user
 # accounts. Leave unset and the first account created claims it.
 OWNER_EMAIL = os.getenv("OWNER_EMAIL", "")
+# Max AI coach messages per user per day. Bounds the worst case when the
+# key is shared across beta testers; 0 disables the cap.
+COACH_DAILY_LIMIT = int(os.getenv("COACH_DAILY_LIMIT", "25"))
 # Google sign-in. The client id is also served to the frontend via
 # /auth/config so the browser can render Google's button.
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")

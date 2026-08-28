@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,9 +15,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user
-from backend.config import ANTHROPIC_API_KEY
+from backend.config import ANTHROPIC_API_KEY, COACH_DAILY_LIMIT
 from backend.db.base import get_session
-from backend.db.models import BankAccount, DebtAccount, SavingsGoal, Transaction
+from backend.db.models import AppState, BankAccount, DebtAccount, SavingsGoal, Transaction
 from backend.services.budget_service import get_budget_month_with_spending
 
 router = APIRouter(prefix="/api/v1/coach", tags=["coach"])
@@ -151,11 +151,52 @@ class ChatRequest(BaseModel):
     history: Optional[list] = None
 
 
+
+async def _check_and_count_usage(user_id: str, db: AsyncSession) -> None:
+    """Enforce a per-user daily message cap.
+
+    The route's slowapi limit is keyed by IP, so it neither isolates accounts
+    nor bounds spend. One AppState row per user holds "YYYY-MM-DD:count" and
+    resets when the date rolls over, so rows don't accumulate per day.
+    """
+    if COACH_DAILY_LIMIT <= 0:
+        return
+
+    today = date.today().isoformat()
+    key = f"coach_usage:{user_id}"
+    result = await db.execute(select(AppState).where(AppState.key == key))
+    state = result.scalar_one_or_none()
+
+    used = 0
+    if state is not None:
+        stored_day, _, stored_count = state.value.partition(":")
+        if stored_day == today:
+            try:
+                used = int(stored_count)
+            except ValueError:
+                used = 0
+
+    if used >= COACH_DAILY_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"You've used all {COACH_DAILY_LIMIT} coach messages for today. It resets tomorrow.",
+        )
+
+    if state is None:
+        db.add(AppState(key=key, value=f"{today}:1"))
+    else:
+        state.value = f"{today}:{used + 1}"
+        state.updated_at = datetime.utcnow()
+    await db.commit()
+
+
 @router.post("/chat")
 @_limiter.limit("30/minute")
 async def chat(request: Request, body: ChatRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=503, detail="AI coach is not configured. Set ANTHROPIC_API_KEY in your environment.")
+
+    await _check_and_count_usage(user_id, db)
 
     data = await _load_data(user_id, db)
     context = _build_context(data)
