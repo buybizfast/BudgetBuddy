@@ -150,6 +150,7 @@ export default function TodayPage() {
   const [safeToSpend, setSafeToSpend] = useState<any>(null)
   const [alerts, setAlerts] = useState<any[]>([])
   const [bankCount, setBankCount] = useState<number | null>(null)
+  const [babyStep, setBabyStep] = useState<any>(null)
   const [notifPermission, setNotifPermission] = useState<string>('unsupported')
   const { bills: upcomingBills } = useUpcomingBills(7)
 
@@ -162,6 +163,7 @@ export default function TodayPage() {
     apiFetch<any>('/api/v1/safe-to-spend/').then(setSafeToSpend).catch(() => {})
     apiFetch<any[]>('/api/v1/insights/alerts').then(setAlerts).catch(() => {})
     apiFetch<any[]>('/api/v1/plaid/accounts').then(a => setBankCount(a.length)).catch(() => setBankCount(0))
+    apiFetch<any>('/api/v1/insights/baby-step').then(setBabyStep).catch(() => {})
   }, [year, month])
 
   useEffect(() => {
@@ -330,6 +332,37 @@ export default function TodayPage() {
                 )}
               </div>
               <ChevronRight size={16} className="text-amber-400 dark:text-amber-500 shrink-0 mt-1" />
+            </div>
+          </Link>
+        )}
+
+        {/* Coach recommendation — what to focus on right now */}
+        {babyStep && bankCount !== 0 && (
+          <Link href={babyStep.href} className="block bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shrink-0">
+                <span className="text-white text-sm font-bold">{babyStep.step}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-400">
+                  Baby Step {babyStep.step} · Focus here
+                </p>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5">{babyStep.title}</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{babyStep.why}</p>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 mt-2">{babyStep.action}</p>
+                {babyStep.detail && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{babyStep.detail}</p>
+                )}
+                {babyStep.target > 0 && (
+                  <div className="mt-2.5">
+                    <ProgressBar value={babyStep.progress ?? 0} max={babyStep.target} color="bg-violet-500" />
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      {fmt(babyStep.progress ?? 0)} of {fmt(babyStep.target)}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <ChevronRight size={16} className="text-gray-300 dark:text-gray-600 shrink-0 mt-1" />
             </div>
           </Link>
         )}
