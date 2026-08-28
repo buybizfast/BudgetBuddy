@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Receipt, Filter, Plus, X, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 import { PageHeader } from '@/components/PageHeader'
 
 import { apiFetch, BASE } from '@/lib/api'
@@ -236,6 +237,12 @@ export default function TransactionsPage() {
                     </optgroup>
                   ))}
                 </select>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+                  Don&apos;t see the category you want?{' '}
+                  <Link href="/budget" className="text-blue-600 hover:text-blue-700 font-medium">
+                    Manage categories in Budget →
+                  </Link>
+                </p>
               </div>
 
               <button type="submit" disabled={saving}
@@ -273,6 +280,16 @@ export default function TransactionsPage() {
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            {/* Categories are per budget month, so the picker only lists what
+                that month has — say where to add more. */}
+            <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Categories come from your {MONTHS[month - 1]} budget.{' '}
+                <Link href="/budget" className="text-blue-600 hover:text-blue-700 font-medium">
+                  Add or edit them →
+                </Link>
+              </p>
+            </div>
             <div className="divide-y divide-gray-100 dark:divide-gray-700">
               {filtered.map(tx => {
                 const [, , dayStr] = tx.date.split('-')
