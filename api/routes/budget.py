@@ -239,6 +239,13 @@ async def run_auto_categorize(year: int, month: int, user_id: str = Depends(get_
     count = await auto_assign_all_unassigned(user_id, year, month, db)
     return {"assigned": count}
 
+@router.post("/month/{year}/{month}/restore-defaults")
+async def restore_default_categories(year: int, month: int, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Add any built-in categories this month is missing, without disturbing
+    existing ones. Months created before a default was introduced never got it."""
+    return await budget_service.add_missing_default_categories(user_id, year, month, db)
+
+
 @router.post("/month/{year}/{month}/copy-previous")
 async def copy_previous_month(year: int, month: int, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     if not (1 <= month <= 12):

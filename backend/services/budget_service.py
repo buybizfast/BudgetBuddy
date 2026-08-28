@@ -283,3 +283,50 @@ async def copy_from_previous_month(user_id: str, year: int, month: int, db: Asyn
                 cats_updated += 1
     await db.commit()
     return {"copied": True, "categories_updated": cats_updated, "income_copied": float(prev.total_income)}
+
+
+async def add_missing_default_categories(user_id: str, year: int, month: int, db: AsyncSession) -> dict[str, Any]:
+    """Add any categories from _DEFAULT_GROUPS that this month doesn't have yet.
+
+    The defaults only seed a budget month at creation, so months created before
+    a category was added to the list never get it. This backfills them without
+    touching existing categories or their budgeted amounts. Groups missing
+    entirely are created too.
+    """
+    bm = await get_or_create_budget_month(user_id, year, month, db)
+    result = await db.execute(
+        select(BudgetMonth).where(BudgetMonth.id == bm.id)
+        .options(selectinload(BudgetMonth.groups).selectinload(BudgetGroup.categories))
+    )
+    bm = result.scalar_one()
+
+    existing_groups = {g.name: g for g in bm.groups}
+    added: list[str] = []
+    next_group_sort = max((g.sort_order for g in bm.groups), default=-1) + 1
+
+    for group_name, category_names in _DEFAULT_GROUPS:
+        group = existing_groups.get(group_name)
+        if group is None:
+            group = BudgetGroup(budget_month_id=bm.id, name=group_name, sort_order=next_group_sort)
+            next_group_sort += 1
+            db.add(group)
+            await db.flush()
+            existing_names: set[str] = set()
+            next_cat_sort = 0
+        else:
+            existing_names = {c.name for c in group.categories}
+            next_cat_sort = max((c.sort_order for c in group.categories), default=-1) + 1
+
+        for cat_name in category_names:
+            if cat_name in existing_names:
+                continue
+            db.add(BudgetCategory(
+                user_id=user_id, group_id=group.id, name=cat_name,
+                budgeted=Decimal("0"), sort_order=next_cat_sort,
+            ))
+            next_cat_sort += 1
+            added.append(f"{group_name} › {cat_name}")
+
+    if added:
+        await db.commit()
+    return {"added": added, "count": len(added)}

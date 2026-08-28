@@ -46,6 +46,7 @@ export default function BudgetPage() {
   const [recurring, setRecurring] = useState<any[]>([])
   const [loadingRecurring, setLoadingRecurring] = useState(false)
   const [copyingMonth, setCopyingMonth] = useState(false)
+  const [restoringDefaults, setRestoringDefaults] = useState(false)
 
   const navMonth = (dir: number) => {
     let m = month + dir, y = year
@@ -175,6 +176,17 @@ export default function BudgetPage() {
   const isOver = leftToBudget < 0
   const isEmpty = !budget || budget.groups.length === 0
 
+  const restoreDefaults = async () => {
+    setRestoringDefaults(true)
+    try {
+      const res = await apiFetch<{ count: number }>(`/api/v1/budget/month/${year}/${month}/restore-defaults`, { method: 'POST' })
+      window.location.reload()
+      if (res.count === 0) setRestoringDefaults(false)
+    } catch {
+      setRestoringDefaults(false)
+    }
+  }
+
   const headerRight = (
     <div className="flex items-center gap-2">
       <button onClick={() => navMonth(-1)} aria-label="Previous month" className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
@@ -209,6 +221,12 @@ export default function BudgetPage() {
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl transition-colors disabled:opacity-50 shadow-sm">
             {copyingMonth ? <Loader2 size={12} className="animate-spin" /> : <Copy size={12} />}
             Copy Last Month
+          </button>
+          <button onClick={restoreDefaults} disabled={restoringDefaults}
+            title="Adds any built-in categories this month is missing. Existing categories and amounts aren't touched."
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl transition-colors disabled:opacity-50 shadow-sm">
+            {restoringDefaults ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+            Add Missing Categories
           </button>
         </div>
 
