@@ -178,11 +178,23 @@ export default function BudgetPage() {
 
   const restoreDefaults = async () => {
     setRestoringDefaults(true)
+    const toast = (message: string) => {
+      const id = Date.now()
+      setToasts(t => [...t, { id, message }])
+      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 5000)
+    }
     try {
       const res = await apiFetch<{ count: number }>(`/api/v1/budget/month/${year}/${month}/restore-defaults`, { method: 'POST' })
-      window.location.reload()
-      if (res.count === 0) setRestoringDefaults(false)
-    } catch {
+      if (res.count > 0) {
+        // Reloading is the simplest way to pull the new groups/categories in.
+        window.location.reload()
+        return
+      }
+      // Say so explicitly — a silent reload with nothing new looks broken.
+      toast(`${MONTHS[month - 1]} already has every built-in category.`)
+    } catch (e: any) {
+      toast(e?.message || 'Could not add categories')
+    } finally {
       setRestoringDefaults(false)
     }
   }
