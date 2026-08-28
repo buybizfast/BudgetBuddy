@@ -249,6 +249,23 @@ async def reset_password(request: Request, body: ResetPasswordRequest, db: Async
     return {"status": "ok"}
 
 
+@router.delete("/me")
+async def delete_account(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Permanently delete the account and everything under it. Every owned
+    table's user_id FK is ON DELETE CASCADE, so removing the row removes the
+    transactions, budgets, debts, goals, and bank links with it."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    email = user.email
+    await db.delete(user)
+    await db.commit()
+    import logging
+    logging.getLogger("api.auth").info("Deleted account %s and all its data", email)
+    return {"status": "deleted"}
+
+
 @router.get("/me")
 async def me(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(User).where(User.id == user_id))

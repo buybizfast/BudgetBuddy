@@ -74,6 +74,66 @@ function DigestButton() {
   )
 }
 
+function AccountCard({ onSignOut }: { onSignOut: () => void }) {
+  const [email, setEmail] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiFetch<{ email: string }>('/api/v1/auth/me').then(d => setEmail(d.email)).catch(() => {})
+  }, [])
+
+  const remove = async () => {
+    setDeleting(true)
+    setError('')
+    try {
+      await apiFetch('/api/v1/auth/me', { method: 'DELETE' })
+      onSignOut()
+    } catch (e: any) {
+      setError(e?.message || 'Could not delete account')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+      <div>
+        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Account</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{email ?? 'Signed in'}</p>
+      </div>
+      {!confirming ? (
+        <button onClick={() => setConfirming(true)}
+          className="text-xs font-medium text-red-500 hover:text-red-600 transition-colors">
+          Delete my account and all data
+        </button>
+      ) : (
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl p-3 space-y-2">
+          <p className="text-xs text-red-700 dark:text-red-300">
+            This permanently deletes your transactions, budgets, debts, goals, and bank connections.
+            It can&apos;t be undone. Type <span className="font-bold">DELETE</span> to confirm.
+          </p>
+          {error && <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>}
+          <input value={typed} onChange={e => setTyped(e.target.value)}
+            className="w-full text-xs rounded-lg border border-red-300 dark:border-red-800 dark:bg-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-500"
+            placeholder="DELETE" />
+          <div className="flex gap-2">
+            <button onClick={remove} disabled={typed !== 'DELETE' || deleting}
+              className="text-xs font-semibold px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-lg transition-colors">
+              {deleting ? 'Deleting…' : 'Permanently delete'}
+            </button>
+            <button onClick={() => { setConfirming(false); setTyped(''); setError('') }}
+              className="text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TodayPage() {
   const router = useRouter()
   const now = new Date()
@@ -89,6 +149,7 @@ export default function TodayPage() {
   const [txns, setTxns] = useState<any[]>([])
   const [safeToSpend, setSafeToSpend] = useState<any>(null)
   const [alerts, setAlerts] = useState<any[]>([])
+  const [bankCount, setBankCount] = useState<number | null>(null)
   const [notifPermission, setNotifPermission] = useState<string>('unsupported')
   const { bills: upcomingBills } = useUpcomingBills(7)
 
@@ -100,6 +161,7 @@ export default function TodayPage() {
     apiFetch<any>(`/api/v1/budget/transactions?year=${year}&month=${month}&limit=5`).then(d => setTxns(d.transactions ?? d)).catch(() => {})
     apiFetch<any>('/api/v1/safe-to-spend/').then(setSafeToSpend).catch(() => {})
     apiFetch<any[]>('/api/v1/insights/alerts').then(setAlerts).catch(() => {})
+    apiFetch<any[]>('/api/v1/plaid/accounts').then(a => setBankCount(a.length)).catch(() => setBankCount(0))
   }, [year, month])
 
   useEffect(() => {
@@ -149,7 +211,11 @@ export default function TodayPage() {
     .filter(s => s.status === 'active')
     .slice(0, 3)
 
-  const spentPct = budget ? (budget.total_spent / budget.total_income) * 100 : 0
+  // Guard the divide: a brand-new account has 0 income and 0 spent, and 0/0
+  // renders as "NaN% of income spent".
+  const spentPct = budget && budget.total_income > 0
+    ? (budget.total_spent / budget.total_income) * 100
+    : 0
   const overBudget = budget && budget.left_to_budget < 0
 
   return (
@@ -168,8 +234,41 @@ export default function TodayPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
 
+        {/* First run — a brand new account is all zeros, so say what to do
+            rather than leaving people staring at an empty dashboard. */}
+        {bankCount === 0 && (
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-sm">
+            <h2 className="text-lg font-bold mb-1">Welcome to Budget Buddy 👋</h2>
+            <p className="text-sm text-blue-100 mb-4">
+              Three quick steps and your dashboard fills itself in.
+            </p>
+            <ol className="space-y-2.5 mb-4">
+              <li className="flex items-start gap-2.5 text-sm">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">1</span>
+                <span><span className="font-semibold">Connect your bank</span> — transactions, balances, and debts import automatically.</span>
+              </li>
+              <li className="flex items-start gap-2.5 text-sm">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">2</span>
+                <span><span className="font-semibold">Add your paychecks</span> — powers Safe to Spend and the cash-flow forecast.</span>
+              </li>
+              <li className="flex items-start gap-2.5 text-sm">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">3</span>
+                <span><span className="font-semibold">Set your budget</span> — give every dollar a job for the month.</span>
+              </li>
+            </ol>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/accounts" className="text-sm font-semibold bg-white text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-50 transition-colors">
+                Connect a bank
+              </Link>
+              <Link href="/budget" className="text-sm font-semibold bg-white/15 text-white px-4 py-2 rounded-xl hover:bg-white/25 transition-colors">
+                Set up budget
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Safe to Spend */}
-        {safeToSpend && (
+        {safeToSpend && bankCount !== 0 && (
           <div className={cn(
             'rounded-2xl p-5 shadow-sm text-white',
             safeToSpend.safe_to_spend < 0
@@ -374,6 +473,9 @@ export default function TodayPage() {
 
         {/* Weekly digest */}
         <DigestButton />
+
+        {/* Account */}
+        <AccountCard onSignOut={logout} />
 
         {/* Quick access grid */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
