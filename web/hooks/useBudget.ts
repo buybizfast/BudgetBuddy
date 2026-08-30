@@ -17,7 +17,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface BudgetCategory {
   id: string; name: string; budgeted: number; spent: number; remaining: number; sort_order: number
-  cost_type: 'fixed' | 'variable'; is_debt_synced: boolean
+  cost_type: 'fixed' | 'variable'; is_debt_synced: boolean; due_date_day: number | null
 }
 export interface BudgetGroup {
   id: string; name: string; budgeted: number; spent: number; remaining: number; sort_order: number; categories: BudgetCategory[]
@@ -101,6 +101,11 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
+  const updateCategoryDueDate = async (id: string, day: number | null) => {
+    await apiFetch(`/api/v1/budget/categories/${id}`, { method: 'PATCH', body: JSON.stringify({ due_date_day: day ?? 0 }) })
+    await refresh()
+  }
+
   const deleteCategory = async (id: string) => {
     await apiFetch(`/api/v1/budget/categories/${id}`, { method: 'DELETE' })
     await refresh()
@@ -164,5 +169,5 @@ export function useBudget(year: number, month: number) {
     await refresh()
   }
 
-  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
+  return { budget, loading, error, refresh, updateIncome, updateCategory, renameCategory, updateCategoryCostType, updateCategoryDueDate, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions }
 }

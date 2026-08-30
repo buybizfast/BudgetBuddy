@@ -146,6 +146,10 @@ class BudgetCategory(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     plaid_categories = Column(JSONB, nullable=False, default=list)
     cost_type = Column(String(10), nullable=False, default="variable")  # fixed / variable
+    # Day of the month this bill is due, when the category represents a dated
+    # bill (rent, utilities, a car payment). Null for undated spending
+    # categories like Groceries. Drives which paycheck has to cover it.
+    due_date_day = Column(Integer, nullable=True)
     # Set when this category was auto-created to track a debt's minimum
     # payment, so it doesn't get duplicated on every sync.
     debt_account_id = Column(UUID(as_uuid=False), ForeignKey("debt_accounts.id", ondelete="SET NULL"), nullable=True)

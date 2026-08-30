@@ -53,6 +53,9 @@ async def _sync_debt_categories(user_id: str, bm: BudgetMonth, db: AsyncSession)
         db.add(BudgetCategory(
             user_id=user_id, group_id=debt_group.id, name=debt.name, budgeted=debt.minimum_payment or Decimal("0"),
             sort_order=next_sort, cost_type="fixed", debt_account_id=debt.id,
+            # Carry the debt's due date across so the payment lands in the right
+            # pay period without being re-entered.
+            due_date_day=debt.due_date_day,
         ))
         next_sort += 1
         changed = True
@@ -146,7 +149,8 @@ async def get_budget_month_with_spending(user_id: str, year: int, month: int, db
             remaining = cat.budgeted - spent
             cats_data.append({"id": str(cat.id), "name": cat.name, "budgeted": float(cat.budgeted),
                                "spent": float(spent), "remaining": float(remaining), "sort_order": cat.sort_order,
-                               "cost_type": cat.cost_type, "is_debt_synced": cat.debt_account_id is not None})
+                               "cost_type": cat.cost_type, "is_debt_synced": cat.debt_account_id is not None,
+                               "due_date_day": cat.due_date_day})
             group_budgeted += cat.budgeted
             group_spent += spent
             # The Income group tracks incoming money, not planned spending —
@@ -330,3 +334,12 @@ async def add_missing_default_categories(user_id: str, year: int, month: int, db
     if added:
         await db.commit()
     return {"added": added, "count": len(added)}
+
+
+async def update_category_due_date(user_id: str, category_id: str, due_date_day: int | None, db: AsyncSession) -> None:
+    result = await db.execute(select(BudgetCategory).where(BudgetCategory.id == category_id, BudgetCategory.user_id == user_id))
+    cat = result.scalar_one_or_none()
+    if cat is None:
+        return
+    cat.due_date_day = due_date_day if due_date_day and 1 <= due_date_day <= 31 else None
+    await db.commit()

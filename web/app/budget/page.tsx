@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, RefreshCw, Wand2, Copy,
-  TrendingUp, Sparkles, Repeat2, Loader2, Plus, ChevronDown, X, Bell, Trash2, GripVertical,
+  TrendingUp, Sparkles, Repeat2, Loader2, Plus, ChevronDown, X, Bell, Trash2, GripVertical, CalendarClock,
 } from 'lucide-react'
 import { useBudget, BudgetGroup, BudgetCategory } from '@/hooks/useBudget'
 import { PageHeader } from '@/components/PageHeader'
@@ -20,6 +20,12 @@ function fmt2(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
+function ordinalDay(n: number) {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
 interface Toast { id: number; message: string }
 interface SpendingAlert { id: string; category_id: string; threshold_pct: number; enabled: boolean }
 interface TriggeredAlert { alert_id: string; category_id: string; category_name: string; threshold_pct: number; budgeted: number; spent: number; pct_used: number; triggered: boolean }
@@ -28,7 +34,7 @@ export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, updateCategoryDueDate, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
   const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null)
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null)
   const [editingIncome, setEditingIncome] = useState(false)
@@ -376,6 +382,7 @@ export default function BudgetPage() {
                 onDeleteAlert={deleteAlert}
                 onRename={renameCategory}
                 onToggleCostType={updateCategoryCostType}
+                onSetDueDate={updateCategoryDueDate}
                 onDeleteCategory={deleteCategory}
                 onReorder={reorderCategories}
                 isDragging={draggedGroupId === group.id}
@@ -553,7 +560,7 @@ interface GroupCardProps {
   onGroupDragStart: () => void; onGroupDragEnter: () => void; onGroupDragEnd: () => void; onGroupDrop: () => void
 }
 
-function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory, onReorder, isDragging, isDragOver, onGroupDragStart, onGroupDragEnter, onGroupDragEnd, onGroupDrop }: GroupCardProps) {
+function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onSetDueDate, onDeleteCategory, onReorder, isDragging, isDragOver, onGroupDragStart, onGroupDragEnter, onGroupDragEnd, onGroupDrop }: GroupCardProps) {
   const over = group.spent > group.budgeted && group.budgeted > 0
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -650,6 +657,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
                 onDeleteAlert={onDeleteAlert}
                 onRename={onRename}
                 onToggleCostType={onToggleCostType}
+                onSetDueDate={onSetDueDate}
                 onDeleteCategory={onDeleteCategory}
                 isDragging={draggedId === cat.id}
                 isDragOver={dragOverId === cat.id && draggedId !== null && draggedId !== cat.id}
@@ -684,7 +692,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
   )
 }
 
-function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onDeleteCategory, isDragging, isDragOver, onDragStart, onDragEnter, onDragEnd, onDrop }: {
+function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onSetDueDate, onDeleteCategory, isDragging, isDragOver, onDragStart, onDragEnter, onDragEnd, onDrop }: {
   cat: BudgetCategory; editing: boolean; input: string
   onStartEdit: () => void; onInputChange: (v: string) => void; onSave: () => void
   alert?: SpendingAlert; triggered?: TriggeredAlert
@@ -697,6 +705,7 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
   onDragStart: () => void; onDragEnter: () => void; onDragEnd: () => void; onDrop: () => void
 }) {
   const [showAlertPopover, setShowAlertPopover] = useState(false)
+  const [showDuePopover, setShowDuePopover] = useState(false)
   const [thresholdInput, setThresholdInput] = useState(String(alert?.threshold_pct ?? 80))
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState(cat.name)
@@ -765,6 +774,55 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
               Debt synced
             </span>
           )}
+          {/* Due date — what assigns this bill to a pay period. */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowDuePopover(v => !v)}
+              title={cat.due_date_day ? `Due the ${ordinalDay(cat.due_date_day)} of each month` : 'Set a due date so this bill shows up under the paycheck that covers it'}
+              className={cn(
+                'flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 border transition-colors',
+                cat.due_date_day
+                  ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border-indigo-100 dark:border-indigo-900'
+                  : 'text-gray-300 dark:text-gray-600 border-transparent hover:text-gray-500 dark:hover:text-gray-400 opacity-0 group-hover:opacity-100'
+              )}
+            >
+              <CalendarClock size={10} />
+              {cat.due_date_day ? ordinalDay(cat.due_date_day) : 'Due date'}
+            </button>
+            {showDuePopover && (
+              <div className="absolute left-0 top-6 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-3 w-56">
+                <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-1">Bill due date</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2">
+                  Groups this bill under the paycheck that covers it.
+                </p>
+                <input
+                  type="date"
+                  value={cat.due_date_day
+                    ? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(Math.min(cat.due_date_day, 28)).padStart(2, '0')}`
+                    : ''}
+                  onChange={e => {
+                    if (!e.target.value) { onSetDueDate(cat.id, null); setShowDuePopover(false); return }
+                    const picked = new Date(e.target.value + 'T00:00:00')
+                    onSetDueDate(cat.id, picked.getDate())
+                    setShowDuePopover(false)
+                  }}
+                  className="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <div className="flex gap-1.5 mt-2">
+                  {cat.due_date_day && (
+                    <button onClick={() => { onSetDueDate(cat.id, null); setShowDuePopover(false) }}
+                      className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg transition-colors">
+                      Clear
+                    </button>
+                  )}
+                  <button onClick={() => setShowDuePopover(false)}
+                    className="text-xs px-2 py-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="relative">
             <button
               onClick={() => { setThresholdInput(String(alert?.threshold_pct ?? 80)); setShowAlertPopover(v => !v) }}

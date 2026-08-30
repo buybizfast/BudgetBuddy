@@ -1,6 +1,7 @@
 """Bill payment tracking routes."""
 from __future__ import annotations
 
+import calendar
 from datetime import date, datetime, timedelta
 from typing import Optional
 
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user
 from backend.db.base import get_session
-from backend.db.models import BillPayment
+from backend.db.models import BillPayment, BudgetCategory, BudgetGroup, BudgetMonth
 from api.routes.subscriptions import get_merged_subscriptions
 
 router = APIRouter(prefix="/api/v1/bills", tags=["bills"])
@@ -78,9 +79,14 @@ async def mark_paid(body: MarkPaidRequest, user_id: str = Depends(get_current_us
 @router.get("/upcoming")
 async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=90), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Return bills due in the next N days that haven't been marked paid. Sourced
-    from the same merged subscription list as the Subscriptions page, so pausing,
-    cancelling, hiding, or changing the cadence/amount of a subscription is
-    immediately reflected here too."""
+    Two sources, merged:
+      - detected/manual subscriptions (the Subscriptions page list), so pausing,
+        cancelling, hiding, or editing one is reflected here immediately; and
+      - budget categories carrying a due_date_day (rent, utilities, a car
+        payment), which are the bills people actually plan but that no
+        recurring-transaction detector will find.
+    A budget category whose name matches a subscription is skipped so the same
+    bill isn't counted twice."""
     today = date.today()
     cutoff = today + timedelta(days=days_ahead)
     year, month = today.year, today.month
@@ -115,6 +121,51 @@ async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=90), u
                 "due_date": bill_date.isoformat(),
                 "days_until": (bill_date - today).days,
             })
+
+    # --- Budgeted bills with a due date -----------------------------------
+    seen = {u["merchant"].strip().lower() for u in upcoming}
+    bm_result = await db.execute(
+        select(BudgetCategory, BudgetGroup.name)
+        .join(BudgetGroup, BudgetCategory.group_id == BudgetGroup.id)
+        .join(BudgetMonth, BudgetGroup.budget_month_id == BudgetMonth.id)
+        .where(
+            BudgetMonth.user_id == user_id,
+            BudgetMonth.year == year, BudgetMonth.month == month,
+            BudgetCategory.due_date_day.isnot(None),
+            BudgetCategory.budgeted > 0,
+        )
+    )
+    for cat, group_name in bm_result.all():
+        if group_name == "Income":
+            continue
+        name = cat.name
+        if name.strip().lower() in seen or name in paid_merchants:
+            continue
+        # A day-of-month repeats, so walk forward month by month to the next
+        # occurrence at or after today, clamping to months that are shorter
+        # than the chosen day (the 31st in a 30-day month bills on the 30th).
+        day = max(1, min(int(cat.due_date_day), 31))
+        y, m = today.year, today.month
+        bill_date = None
+        for _ in range(4):
+            last_day = calendar.monthrange(y, m)[1]
+            candidate = date(y, m, min(day, last_day))
+            if candidate >= today:
+                bill_date = candidate
+                break
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+        if bill_date is None or bill_date > cutoff:
+            continue
+        upcoming.append({
+            "merchant": name,
+            "amount": float(cat.budgeted),
+            "due_date": bill_date.isoformat(),
+            "days_until": (bill_date - today).days,
+            "source": "budget",
+        })
 
     upcoming.sort(key=lambda x: x["due_date"])
     return upcoming

@@ -47,6 +47,7 @@ class UpdateCategoryRequest(BaseModel):
     budgeted: Optional[float] = None
     name: Optional[str] = None
     cost_type: Optional[str] = None
+    due_date_day: Optional[int] = None
 
 @router.patch("/categories/{category_id}")
 async def update_category(category_id: str, body: UpdateCategoryRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
@@ -57,6 +58,8 @@ async def update_category(category_id: str, body: UpdateCategoryRequest, user_id
             await budget_service.update_category_budget(user_id, category_id, body.budgeted, db)
         if body.name is not None:
             await budget_service.rename_category(user_id, category_id, body.name, db)
+        if body.due_date_day is not None:
+            await budget_service.update_category_due_date(user_id, category_id, body.due_date_day or None, db)
         if body.cost_type is not None:
             await budget_service.update_category_cost_type(user_id, category_id, body.cost_type, db)
     except Exception:
