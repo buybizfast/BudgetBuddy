@@ -783,7 +783,7 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
                 'flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 border transition-colors',
                 cat.due_date_day
                   ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border-indigo-100 dark:border-indigo-900'
-                  : 'text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:text-gray-600 dark:hover:text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+                  : 'text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400'
               )}
             >
               <CalendarClock size={10} />
