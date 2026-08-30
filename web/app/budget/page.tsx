@@ -53,6 +53,7 @@ export default function BudgetPage() {
   const [loadingRecurring, setLoadingRecurring] = useState(false)
   const [copyingMonth, setCopyingMonth] = useState(false)
   const [restoringDefaults, setRestoringDefaults] = useState(false)
+  const [detailCat, setDetailCat] = useState<BudgetCategory | null>(null)
 
   const navMonth = (dir: number) => {
     let m = month + dir, y = year
@@ -383,6 +384,7 @@ export default function BudgetPage() {
                 onRename={renameCategory}
                 onToggleCostType={updateCategoryCostType}
                 onSetDueDate={updateCategoryDueDate}
+                onOpenDetails={setDetailCat}
                 onDeleteCategory={deleteCategory}
                 onReorder={reorderCategories}
                 isDragging={draggedGroupId === group.id}
@@ -518,6 +520,21 @@ export default function BudgetPage() {
         )}
       </div>
 
+      {detailCat && (
+        <CategoryDetailModal
+          cat={detailCat}
+          alert={alerts.find(a => a.category_id === detailCat.id)}
+          onClose={() => setDetailCat(null)}
+          onRename={renameCategory}
+          onSetBudget={updateCategory}
+          onSetCostType={updateCategoryCostType}
+          onSetDueDate={updateCategoryDueDate}
+          onUpsertAlert={upsertAlert}
+          onDeleteAlert={deleteAlert}
+          onDelete={deleteCategory}
+        />
+      )}
+
       {/* Toast notifications */}
       <div className="fixed bottom-4 right-4 z-50 space-y-2">
         {toasts.map(t => (
@@ -554,13 +571,15 @@ interface GroupCardProps {
   onDeleteAlert: (catId: string) => void
   onRename: (catId: string, name: string) => void
   onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
+  onSetDueDate: (id: string, day: number | null) => void
+  onOpenDetails: (cat: BudgetCategory) => void
   onDeleteCategory: (catId: string) => void
   onReorder: (groupId: string, categoryIds: string[]) => void
   isDragging: boolean; isDragOver: boolean
   onGroupDragStart: () => void; onGroupDragEnter: () => void; onGroupDragEnd: () => void; onGroupDrop: () => void
 }
 
-function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onSetDueDate, onDeleteCategory, onReorder, isDragging, isDragOver, onGroupDragStart, onGroupDragEnter, onGroupDragEnd, onGroupDrop }: GroupCardProps) {
+function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput, onStartEdit, onInputChange, onSaveCategory, addingCategory, newCategoryName, onStartAdd, onNewCategoryChange, onSubmitAdd, onCancelAdd, alerts, triggeredAlerts, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onSetDueDate, onOpenDetails, onDeleteCategory, onReorder, isDragging, isDragOver, onGroupDragStart, onGroupDragEnter, onGroupDragEnd, onGroupDrop }: GroupCardProps) {
   const over = group.spent > group.budgeted && group.budgeted > 0
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -658,6 +677,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
                 onRename={onRename}
                 onToggleCostType={onToggleCostType}
                 onSetDueDate={onSetDueDate}
+                onOpenDetails={onOpenDetails}
                 onDeleteCategory={onDeleteCategory}
                 isDragging={draggedId === cat.id}
                 isDragOver={dragOverId === cat.id && draggedId !== null && draggedId !== cat.id}
@@ -692,7 +712,7 @@ function GroupCard({ group, collapsed, onToggle, editingCategory, categoryInput,
   )
 }
 
-function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onSetDueDate, onDeleteCategory, isDragging, isDragOver, onDragStart, onDragEnter, onDragEnd, onDrop }: {
+function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, alert, triggered, onUpsertAlert, onDeleteAlert, onRename, onToggleCostType, onSetDueDate, onOpenDetails, onDeleteCategory, isDragging, isDragOver, onDragStart, onDragEnter, onDragEnd, onDrop }: {
   cat: BudgetCategory; editing: boolean; input: string
   onStartEdit: () => void; onInputChange: (v: string) => void; onSave: () => void
   alert?: SpendingAlert; triggered?: TriggeredAlert
@@ -700,22 +720,13 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
   onDeleteAlert: (catId: string) => void
   onRename: (catId: string, name: string) => void
   onToggleCostType: (catId: string, costType: 'fixed' | 'variable') => void
+  onSetDueDate: (id: string, day: number | null) => void
+  onOpenDetails: (cat: BudgetCategory) => void
   onDeleteCategory: (catId: string) => void
   isDragging: boolean; isDragOver: boolean
   onDragStart: () => void; onDragEnter: () => void; onDragEnd: () => void; onDrop: () => void
 }) {
-  const [showAlertPopover, setShowAlertPopover] = useState(false)
-  const [showDuePopover, setShowDuePopover] = useState(false)
-  const [thresholdInput, setThresholdInput] = useState(String(alert?.threshold_pct ?? 80))
-  const [editingName, setEditingName] = useState(false)
-  const [nameInput, setNameInput] = useState(cat.name)
 
-  const saveName = () => {
-    setEditingName(false)
-    const trimmed = nameInput.trim()
-    if (trimmed && trimmed !== cat.name) onRename(cat.id, trimmed)
-    else setNameInput(cat.name)
-  }
   const pct = cat.budgeted > 0 ? Math.min(100, (cat.spent / cat.budgeted) * 100) : cat.spent > 0 ? 100 : 0
   const over = cat.spent > cat.budgeted && cat.budgeted > 0
   const barColor = over ? 'bg-red-500' : pct >= 85 ? 'bg-amber-400' : 'bg-blue-500'
@@ -741,129 +752,33 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
           <GripVertical size={13} />
         </span>
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-1">
-          {editingName ? (
-            <input autoFocus value={nameInput}
-              onChange={e => setNameInput(e.target.value)}
-              onBlur={saveName}
-              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(cat.name); setEditingName(false) } }}
-              className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 flex-1" />
-          ) : (
-            <button onClick={() => { setNameInput(cat.name); setEditingName(true) }}
-              className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 truncate text-left transition-colors">
-              {cat.name}
-            </button>
-          )}
-          <select
-            value={cat.cost_type}
-            onChange={e => onToggleCostType(cat.id, e.target.value as 'fixed' | 'variable')}
-            title="Fixed or variable cost"
-            className={cn(
-              'shrink-0 text-[10px] uppercase tracking-wide font-medium rounded-full border pl-1.5 pr-4 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none bg-no-repeat',
-              cat.cost_type === 'fixed'
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border-blue-100 dark:border-blue-900'
-                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-100 dark:border-amber-900'
-            )}
-            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='currentColor' stroke-width='1.5' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E")`, backgroundPosition: 'right 2px center', backgroundSize: '9px' }}
-          >
-            <option value="fixed">fixed</option>
-            <option value="variable">variable</option>
-          </select>
+          <button onClick={() => onOpenDetails(cat)}
+            title="Edit name, amount, due date, and alert"
+            className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 truncate text-left transition-colors">
+            {cat.name}
+          </button>
+          <span className={cn(
+            'shrink-0 text-[10px] uppercase tracking-wide font-medium rounded-full border px-1.5 py-0.5',
+            cat.cost_type === 'fixed'
+              ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border-blue-100 dark:border-blue-900'
+              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-100 dark:border-amber-900'
+          )}>
+            {cat.cost_type}
+          </span>
           {cat.is_debt_synced && (
             <span title="Synced from a debt's minimum payment — this category's budgeted amount won't be overwritten automatically"
               className="shrink-0 text-[9px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
               Debt synced
             </span>
           )}
-          {/* Due date — what assigns this bill to a pay period. */}
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setShowDuePopover(v => !v)}
-              title={cat.due_date_day ? `Due the ${ordinalDay(cat.due_date_day)} of each month` : 'Set a due date so this bill shows up under the paycheck that covers it'}
-              className={cn(
-                'flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 border transition-colors',
-                cat.due_date_day
-                  ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border-indigo-100 dark:border-indigo-900'
-                  : 'text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400'
-              )}
-            >
-              <CalendarClock size={10} />
-              {cat.due_date_day ? ordinalDay(cat.due_date_day) : 'Due date'}
-            </button>
-            {showDuePopover && (
-              <div className="absolute left-0 top-6 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-3 w-56">
-                <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-1">Bill due date</p>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2">
-                  Groups this bill under the paycheck that covers it.
-                </p>
-                <input
-                  type="date"
-                  value={cat.due_date_day
-                    ? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(Math.min(cat.due_date_day, 28)).padStart(2, '0')}`
-                    : ''}
-                  onChange={e => {
-                    if (!e.target.value) { onSetDueDate(cat.id, null); setShowDuePopover(false); return }
-                    const picked = new Date(e.target.value + 'T00:00:00')
-                    onSetDueDate(cat.id, picked.getDate())
-                    setShowDuePopover(false)
-                  }}
-                  className="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                <div className="flex gap-1.5 mt-2">
-                  {cat.due_date_day && (
-                    <button onClick={() => { onSetDueDate(cat.id, null); setShowDuePopover(false) }}
-                      className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg transition-colors">
-                      Clear
-                    </button>
-                  )}
-                  <button onClick={() => setShowDuePopover(false)}
-                    className="text-xs px-2 py-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => { setThresholdInput(String(alert?.threshold_pct ?? 80)); setShowAlertPopover(v => !v) }}
-              className={cn(
-                'opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-0.5 rounded',
-                alertTriggered ? 'opacity-100 text-red-500 hover:text-red-600' :
-                alertSet ? 'opacity-100 text-amber-500 hover:text-amber-600' :
-                'text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400'
-              )}
-            >
-              <Bell size={11} />
-            </button>
-            {showAlertPopover && (
-              <div className="absolute left-0 top-6 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-3 w-52">
-                <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">Spending Alert</p>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Alert when spent reaches</label>
-                <div className="flex items-center gap-2 mb-3">
-                  <input type="number" min="1" max="100" value={thresholdInput}
-                    onChange={e => setThresholdInput(e.target.value)}
-                    className="w-16 text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900" />
-                  <span className="text-xs text-gray-500 dark:text-gray-400">% of budget</span>
-                </div>
-                <div className="flex gap-1.5">
-                  <button onClick={() => { onUpsertAlert(cat.id, parseInt(thresholdInput) || 80); setShowAlertPopover(false) }}
-                    className="flex-1 text-xs py-1.5 bg-[#1a2e4a] hover:bg-[#162540] text-white rounded-xl font-medium transition-colors">
-                    Save
-                  </button>
-                  {alertSet && (
-                    <button onClick={() => { onDeleteAlert(cat.id); setShowAlertPopover(false) }}
-                      className="text-xs px-2 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors">
-                      Remove
-                    </button>
-                  )}
-                  <button onClick={() => setShowAlertPopover(false)}
-                    className="text-xs px-2 py-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                    ✕
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          {cat.due_date_day && (
+            <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300">
+              <CalendarClock size={9} />{ordinalDay(cat.due_date_day)}
+            </span>
+          )}
+          {alertSet && (
+            <Bell size={10} className={cn('shrink-0', alertTriggered ? 'text-red-500' : 'text-amber-500')} />
+          )}
         </div>
         <div className="flex items-center shrink-0">
           {/* Planned — editable */}
@@ -901,6 +816,150 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
       <div className="h-[3px] bg-gray-100 dark:bg-gray-700 mx-4 mb-0.5 rounded-full overflow-hidden">
         <div className={cn('h-full rounded-full transition-all duration-300', barColor)}
           style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function CategoryDetailModal({ cat, alert, onClose, onRename, onSetBudget, onSetCostType, onSetDueDate, onUpsertAlert, onDeleteAlert, onDelete }: {
+  cat: BudgetCategory
+  alert?: SpendingAlert
+  onClose: () => void
+  onRename: (id: string, name: string) => void
+  onSetBudget: (id: string, amount: number) => void
+  onSetCostType: (id: string, t: 'fixed' | 'variable') => void
+  onSetDueDate: (id: string, day: number | null) => void
+  onUpsertAlert: (id: string, threshold: number) => void
+  onDeleteAlert: (id: string) => void
+  onDelete: (id: string) => void
+}) {
+  const [name, setName] = useState(cat.name)
+  const [amount, setAmount] = useState(cat.budgeted ? String(cat.budgeted) : '')
+  const [costType, setCostType] = useState(cat.cost_type)
+  const [dueDay, setDueDay] = useState<number | null>(cat.due_date_day)
+  const [alertOn, setAlertOn] = useState(!!alert?.enabled)
+  const [threshold, setThreshold] = useState(String(alert?.threshold_pct ?? 80))
+  const [saving, setSaving] = useState(false)
+
+  // Anchored on the current month so a picked date maps to the month shown.
+  const today = new Date()
+  const dateValue = dueDay
+    ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(Math.min(dueDay, 28)).padStart(2, '0')}`
+    : ''
+
+  const save = async () => {
+    setSaving(true)
+    const trimmed = name.trim()
+    if (trimmed && trimmed !== cat.name) onRename(cat.id, trimmed)
+    const parsed = parseFloat(amount.replace(/[^0-9.]/g, ''))
+    if (!isNaN(parsed) && parsed !== cat.budgeted) onSetBudget(cat.id, parsed)
+    if (costType !== cat.cost_type) onSetCostType(cat.id, costType)
+    if (dueDay !== cat.due_date_day) onSetDueDate(cat.id, dueDay)
+    if (alertOn) onUpsertAlert(cat.id, parseInt(threshold) || 80)
+    else if (alert?.enabled) onDeleteAlert(cat.id)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Edit Category</h3>
+          <button onClick={onClose} aria-label="Close" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+            <X size={16} />
+          </button>
+        </div>
+
+        {cat.is_debt_synced && (
+          <p className="text-xs bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 rounded-lg px-3 py-2">
+            Linked to a debt — its balance stays in sync, but the amount and due date here are yours to set.
+          </p>
+        )}
+
+        <div>
+          <label htmlFor="cat-name" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Name</label>
+          <input id="cat-name" value={name} onChange={e => setName(e.target.value)}
+            className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        <div>
+          <label htmlFor="cat-amount" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Planned amount</label>
+          <div className="flex items-center gap-1">
+            <span className="text-gray-400 dark:text-gray-500 text-sm">$</span>
+            <input id="cat-amount" value={amount} inputMode="decimal" onChange={e => setAmount(e.target.value)}
+              placeholder="0"
+              className="flex-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="cat-due" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Due date</label>
+          <input id="cat-due" type="date" value={dateValue}
+            onChange={e => {
+              if (!e.target.value) { setDueDay(null); return }
+              setDueDay(new Date(e.target.value + 'T00:00:00').getDate())
+            }}
+            className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              {dueDay
+                ? `Bills the ${ordinalDay(dueDay)} of every month — groups under the paycheck that covers it.`
+                : 'Optional. Add one to see this bill on the Paychecks page.'}
+            </p>
+            {dueDay && (
+              <button onClick={() => setDueDay(null)}
+                className="text-[11px] text-gray-400 hover:text-red-500 shrink-0 ml-2 transition-colors">
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Cost type</span>
+          <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
+            {(['fixed', 'variable'] as const).map(t => (
+              <button key={t} onClick={() => setCostType(t)}
+                className={cn('flex-1 text-xs py-1.5 rounded-md transition-colors font-medium capitalize',
+                  costType === t ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={alertOn} onChange={e => setAlertOn(e.target.checked)}
+              className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" />
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Alert me when spending reaches</span>
+          </label>
+          {alertOn && (
+            <div className="flex items-center gap-2 mt-2 pl-6">
+              <input type="number" min="1" max="100" value={threshold} onChange={e => setThreshold(e.target.value)}
+                className="w-16 text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">% of the planned amount</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={save} disabled={saving}
+            className="flex-1 text-sm py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-semibold transition-colors">
+            Save
+          </button>
+          <button onClick={onClose}
+            className="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors">
+            Cancel
+          </button>
+        </div>
+
+        <button
+          onClick={() => { if (confirm(`Delete "${cat.name}"? This can't be undone.`)) { onDelete(cat.id); onClose() } }}
+          className="w-full text-xs text-red-500 hover:text-red-600 transition-colors pt-1">
+          Delete this category
+        </button>
       </div>
     </div>
   )
