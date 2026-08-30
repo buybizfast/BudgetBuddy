@@ -259,3 +259,79 @@ async def revert_occurrence(paycheck_id: str, occurrence_date: date, user_id: st
     await db.delete(override)
     await db.commit()
     return {"status": "ok"}
+
+
+@router.get("/periods")
+async def get_pay_periods(
+    days_ahead: int = Query(default=60, ge=14, le=90),
+    user_id: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Bills grouped by the paycheck that has to cover them.
+
+    A pay period runs from one paycheck up to (not including) the next, so
+    every upcoming bill is assigned to the most recent paycheck on or before
+    its due date. Answers "what does this paycheck have to cover" — the
+    question paycheck budgeting is built around.
+    """
+    from api.routes.bills import get_upcoming_unpaid
+
+    today = date.today()
+    paychecks = await get_upcoming(days_ahead=days_ahead, user_id=user_id, db=db)
+    bills = await get_upcoming_unpaid(days_ahead=days_ahead, user_id=user_id, db=db)
+
+    if not paychecks:
+        return {
+            "periods": [],
+            "unassigned_bills": bills,
+            "message": "Add a paycheck schedule to group bills by payday.",
+        }
+
+    # Boundaries: each paycheck starts a period ending the day before the next.
+    periods = []
+    for idx, p in enumerate(paychecks):
+        start = date.fromisoformat(p["date"])
+        end = (
+            date.fromisoformat(paychecks[idx + 1]["date"]) - timedelta(days=1)
+            if idx + 1 < len(paychecks)
+            else start + timedelta(days=days_ahead)
+        )
+        periods.append({
+            "paycheck_id": p["paycheck_id"],
+            "source": p["source"],
+            "amount": p["amount"],
+            "pay_date": p["date"],
+            "period_start": start.isoformat(),
+            "period_end": end.isoformat(),
+            "days_until": p["days_until"],
+            "bills": [],
+        })
+
+    # Bills before the first paycheck aren't covered by any of them — they have
+    # to come out of money already in the account, so surface them separately
+    # rather than silently folding them into period one.
+    first_pay = date.fromisoformat(periods[0]["pay_date"])
+    unassigned = []
+
+    for b in bills:
+        due = date.fromisoformat(b["due_date"])
+        if due < first_pay:
+            unassigned.append(b)
+            continue
+        for period in periods:
+            if date.fromisoformat(period["period_start"]) <= due <= date.fromisoformat(period["period_end"]):
+                period["bills"].append(b)
+                break
+
+    for period in periods:
+        bills_total = sum(b["amount"] for b in period["bills"])
+        period["bills_total"] = round(bills_total, 2)
+        period["leftover"] = round(period["amount"] - bills_total, 2)
+        period["bill_count"] = len(period["bills"])
+
+    return {
+        "periods": periods,
+        "unassigned_bills": unassigned,
+        "unassigned_total": round(sum(b["amount"] for b in unassigned), 2),
+        "today": today.isoformat(),
+    }

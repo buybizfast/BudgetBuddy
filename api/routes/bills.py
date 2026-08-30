@@ -76,7 +76,7 @@ async def mark_paid(body: MarkPaidRequest, user_id: str = Depends(get_current_us
 
 
 @router.get("/upcoming")
-async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=30), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def get_upcoming_unpaid(days_ahead: int = Query(default=7, ge=1, le=90), user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Return bills due in the next N days that haven't been marked paid. Sourced
     from the same merged subscription list as the Subscriptions page, so pausing,
     cancelling, hiding, or changing the cadence/amount of a subscription is

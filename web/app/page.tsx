@@ -20,6 +20,7 @@ const quickLinks = [
   { href: '/emergency',     label: 'Emergency',     icon: Shield,       color: 'bg-blue-50 text-blue-600' },
   { href: '/debt',          label: 'Debt',          icon: CreditCard,   color: 'bg-red-50 text-red-500' },
   { href: '/subscriptions', label: 'Subscriptions', icon: RefreshCw,    color: 'bg-teal-50 text-teal-600' },
+  { href: '/paychecks',     label: 'Paychecks',     icon: Wallet,       color: 'bg-emerald-50 text-emerald-600' },
   { href: '/calendar',      label: 'Calendar',      icon: CalendarDays, color: 'bg-indigo-50 text-indigo-600' },
   { href: '/networth',      label: 'Net Worth',     icon: LineChart,    color: 'bg-green-50 text-green-600' },
   { href: '/report',        label: 'Report',        icon: FileText,     color: 'bg-slate-50 text-slate-600' },
