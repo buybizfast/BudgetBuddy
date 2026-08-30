@@ -269,10 +269,14 @@ async def get_pay_periods(
 ):
     """Bills grouped by the paycheck that has to cover them.
 
-    A pay period runs from one paycheck up to (not including) the next, so
-    every upcoming bill is assigned to the most recent paycheck on or before
-    its due date. Answers "what does this paycheck have to cover" — the
-    question paycheck budgeting is built around.
+    Paychecks landing on the same day are one pay period, not several: they're
+    a single deposit event from the budget's point of view, and treating them
+    separately produced periods that ended before they began (period N ends the
+    day before the next paycheck, which for a same-day paycheck is yesterday),
+    leaving empty cards while the last one absorbed every bill.
+
+    A period therefore runs from one pay DATE up to the day before the next
+    distinct pay date, and reports every income source arriving that day.
     """
     from api.routes.bills import get_upcoming_unpaid
 
@@ -284,35 +288,44 @@ async def get_pay_periods(
         return {
             "periods": [],
             "unassigned_bills": bills,
+            "unassigned_total": round(sum(b["amount"] for b in bills), 2),
             "message": "Add a paycheck schedule to group bills by payday.",
+            "today": today.isoformat(),
         }
 
-    # Boundaries: each paycheck starts a period ending the day before the next.
-    periods = []
-    for idx, p in enumerate(paychecks):
-        start = date.fromisoformat(p["date"])
-        end = (
-            date.fromisoformat(paychecks[idx + 1]["date"]) - timedelta(days=1)
-            if idx + 1 < len(paychecks)
-            else start + timedelta(days=days_ahead)
-        )
-        periods.append({
+    # Collapse to one entry per pay date, keeping each source that arrives then.
+    by_date: dict[str, dict] = {}
+    for p in paychecks:
+        entry = by_date.setdefault(p["date"], {
+            "pay_date": p["date"],
+            "days_until": p["days_until"],
+            "amount": 0.0,
+            "sources": [],
+            "bills": [],
+        })
+        entry["amount"] += p["amount"]
+        entry["sources"].append({
             "paycheck_id": p["paycheck_id"],
             "source": p["source"],
             "amount": p["amount"],
-            "pay_date": p["date"],
-            "period_start": start.isoformat(),
-            "period_end": end.isoformat(),
-            "days_until": p["days_until"],
-            "bills": [],
         })
 
-    # Bills before the first paycheck aren't covered by any of them — they have
-    # to come out of money already in the account, so surface them separately
-    # rather than silently folding them into period one.
+    periods = [by_date[d] for d in sorted(by_date)]
+    for idx, period in enumerate(periods):
+        start = date.fromisoformat(period["pay_date"])
+        end = (
+            date.fromisoformat(periods[idx + 1]["pay_date"]) - timedelta(days=1)
+            if idx + 1 < len(periods)
+            else start + timedelta(days=days_ahead)
+        )
+        period["period_start"] = start.isoformat()
+        period["period_end"] = end.isoformat()
+        period["amount"] = round(period["amount"], 2)
+
+    # Bills before the first paycheck aren't covered by any of them — they come
+    # out of money already banked, so report them separately.
     first_pay = date.fromisoformat(periods[0]["pay_date"])
     unassigned = []
-
     for b in bills:
         due = date.fromisoformat(b["due_date"])
         if due < first_pay:
@@ -324,6 +337,7 @@ async def get_pay_periods(
                 break
 
     for period in periods:
+        period["bills"].sort(key=lambda b: b["due_date"])
         bills_total = sum(b["amount"] for b in period["bills"])
         period["bills_total"] = round(bills_total, 2)
         period["leftover"] = round(period["amount"] - bills_total, 2)

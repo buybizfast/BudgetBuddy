@@ -13,9 +13,14 @@ interface Bill {
   days_until: number
 }
 
-interface Period {
+interface IncomeSource {
   paycheck_id: string
   source: string
+  amount: number
+}
+
+interface Period {
+  sources: IncomeSource[]
   amount: number
   pay_date: string
   period_start: string
@@ -145,7 +150,7 @@ export default function PaychecksPage() {
         {periods.map(p => {
           const short = p.leftover < 0
           return (
-            <div key={`${p.paycheck_id}-${p.pay_date}`} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <div key={p.pay_date} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
               {/* Paycheck header */}
               <div className={cn(
                 'px-4 py-3 text-white',
@@ -157,11 +162,18 @@ export default function PaychecksPage() {
                       {p.days_until === 0 ? 'Today' : p.days_until === 1 ? 'Tomorrow' : `In ${p.days_until} days`}
                       {' · '}covers through {fmtDate(p.period_end)}
                     </p>
-                    <p className="font-bold text-sm truncate">
-                      {p.source} — {fmtDay(p.pay_date)}
-                    </p>
+                    <p className="font-bold text-sm truncate">{fmtDay(p.pay_date)}</p>
                   </div>
                   <p className="text-lg font-bold shrink-0">{fmt(p.amount)}</p>
+                </div>
+                {/* Every deposit landing this day, so the total is explainable. */}
+                <div className="mt-2 pt-2 border-t border-white/20 space-y-0.5">
+                  {p.sources.map((src, i) => (
+                    <div key={`${src.paycheck_id}-${i}`} className="flex items-center justify-between text-xs">
+                      <span className="opacity-90 truncate">{src.source}</span>
+                      <span className="font-semibold shrink-0 ml-2">+{fmt(src.amount)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -208,7 +220,13 @@ export default function PaychecksPage() {
               <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-700 space-y-1">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-500 dark:text-gray-400">
-                    {p.bill_count} bill{p.bill_count !== 1 ? 's' : ''} this period
+                    Coming in ({p.sources.length} source{p.sources.length !== 1 ? 's' : ''})
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">+{fmt(p.amount)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    Going out ({p.bill_count} bill{p.bill_count !== 1 ? 's' : ''})
                   </span>
                   <span className="text-red-500 font-medium">−{fmt(p.bills_total)}</span>
                 </div>
