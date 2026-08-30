@@ -107,14 +107,18 @@ async def list_items(user_id: str = Depends(get_current_user), db: AsyncSession 
     # The "manual-<user_id>" item backs the Cash/Manual account for
     # hand-entered transactions — it's not a real Plaid connection, so it
     # shouldn't appear as one to disconnect/reconnect.
+    # Include "needs_reauth" as well as active: a paused connection must stay
+    # visible, since hiding it would leave no way to reconnect it.
     result = await db.execute(
         select(PlaidItem).where(
-            PlaidItem.user_id == user_id, PlaidItem.status == "active",
+            PlaidItem.user_id == user_id,
+            PlaidItem.status.in_(("active", "needs_reauth")),
             PlaidItem.item_id != f"manual-{user_id}",
         )
     )
     items = result.scalars().all()
     return [{"id": str(i.id), "institution_name": i.institution_name, "status": i.status,
+             "needs_reauth": i.status == "needs_reauth",
              "last_sync_error": i.last_sync_error} for i in items]
 
 

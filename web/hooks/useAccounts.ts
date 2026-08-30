@@ -10,7 +10,7 @@ interface Account {
   credit_limit: number | null; mask: string | null; institution_name: string | null
 }
 
-interface PlaidItem { id: string; institution_name: string; status: string; last_sync_error: string | null }
+interface PlaidItem { id: string; institution_name: string; status: string; needs_reauth?: boolean; last_sync_error: string | null }
 
 interface NetWorth { assets: number; liabilities: number; net_worth: number }
 

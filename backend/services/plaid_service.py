@@ -372,11 +372,31 @@ async def _upsert_transaction(txn: Any, user_id: str, db: AsyncSession) -> Trans
         return new_txn
 
 
+
+# Plaid errors that mean the connection can only be fixed by the user
+# re-authorizing — retrying them on a schedule burns an API call and fills the
+# logs with an identical stack trace every cycle, forever.
+_UNRECOVERABLE_ERRORS = (
+    "INVALID_ACCESS_TOKEN",
+    "ITEM_LOGIN_REQUIRED",
+    "USER_PERMISSION_REVOKED",
+    "ITEM_NOT_FOUND",
+    "ITEM_EXPIRED",
+)
+
+
+def _is_unrecoverable(exc: Exception) -> bool:
+    text = str(exc)
+    return any(code in text for code in _UNRECOVERABLE_ERRORS)
+
+
 async def refresh_all_items(db: AsyncSession, user_id: Optional[str] = None) -> dict[str, Any]:
     """Syncs every active Plaid item. Pass user_id to scope to one user's
     items (a manual "Sync Now"); omit it for the background sync loop, which
     processes every user's items each cycle."""
     from sqlalchemy import update as sa_update
+    # "needs_reauth" items are skipped: only the user re-authorizing can fix
+    # them, and reauth-complete flips them back to active.
     query = select(PlaidItem).where(PlaidItem.status == "active", ~PlaidItem.item_id.like("manual-%"))
     if user_id is not None:
         query = query.where(PlaidItem.user_id == user_id)
@@ -399,15 +419,25 @@ async def refresh_all_items(db: AsyncSession, user_id: Optional[str] = None) -> 
             )
             await db.commit()
         except Exception as exc:
-            log.error("Failed to sync item %s: %s", item_id, exc)
+            unrecoverable = _is_unrecoverable(exc)
+            if unrecoverable:
+                log.warning(
+                    "Item %s needs reauthorization — pausing its syncs until the user reconnects: %s",
+                    item_id, str(exc)[:200],
+                )
+            else:
+                log.error("Failed to sync item %s: %s", item_id, exc)
             # A failed query leaves the shared session's transaction aborted —
             # without rolling back here, every subsequent item in this loop
             # would fail too ("current transaction is aborted"), even if its
             # own sync would otherwise have succeeded.
             await db.rollback()
             try:
+                values = {"last_sync_error": str(exc)[:500]}
+                if unrecoverable:
+                    values["status"] = "needs_reauth"
                 await db.execute(
-                    sa_update(PlaidItem).where(PlaidItem.id == item_id).values(last_sync_error=str(exc)[:500])
+                    sa_update(PlaidItem).where(PlaidItem.id == item_id).values(**values)
                 )
                 await db.commit()
             except Exception as record_exc:
