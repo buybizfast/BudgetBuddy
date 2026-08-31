@@ -747,16 +747,24 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
         isDragOver && 'border-t-2 border-t-blue-500'
       )}
     >
-      <div className="flex items-center gap-1.5 sm:gap-3 px-2 sm:px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
-        <span className="hidden sm:block shrink-0 -ml-1 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Drag to reorder">
+      {/* The whole row opens the detail editor — people tap the row, not a
+          specific word in it. Inner controls (inline amount edit, delete)
+          stopPropagation so they still work independently. */}
+      <div
+        onClick={() => onOpenDetails(cat)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetails(cat) } }}
+        aria-label={`Edit ${cat.name}`}
+        className="flex items-center gap-1.5 sm:gap-3 px-2 sm:px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+      >
+        <span onClick={e => e.stopPropagation()} className="hidden sm:block shrink-0 -ml-1 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Drag to reorder">
           <GripVertical size={13} />
         </span>
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-1">
-          <button onClick={() => onOpenDetails(cat)}
-            title="Edit name, amount, due date, and alert"
-            className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 truncate text-left transition-colors">
+          <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
             {cat.name}
-          </button>
+          </span>
           <span className={cn(
             'shrink-0 text-[10px] uppercase tracking-wide font-medium rounded-full border px-1.5 py-0.5',
             cat.cost_type === 'fixed'
@@ -783,7 +791,7 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
         <div className="flex items-center shrink-0">
           {/* Planned — editable */}
           {editing ? (
-            <div className="flex items-center gap-0.5 w-16 sm:w-20 justify-end">
+            <div onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 w-16 sm:w-20 justify-end">
               <span className="text-gray-400 dark:text-gray-500 text-xs">$</span>
               <input autoFocus value={input}
                 inputMode="decimal"
@@ -793,7 +801,8 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
                 className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-12 sm:w-16 rounded border border-blue-400 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-right" />
             </div>
           ) : (
-            <button onClick={onStartEdit}
+            <button onClick={e => { e.stopPropagation(); onStartEdit() }}
+              title="Quick-edit the planned amount"
               className="text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 w-16 sm:w-20 text-right transition-colors font-medium">
               {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(cat.budgeted)}
             </button>
@@ -805,11 +814,12 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(cat.remaining)}
           </span>
           <button
-            onClick={() => { if (confirm(`Delete "${cat.name}"? This can't be undone.`)) onDeleteCategory(cat.id) }}
+            onClick={e => { e.stopPropagation(); if (confirm(`Delete "${cat.name}"? This can't be undone.`)) onDeleteCategory(cat.id) }}
             aria-label={`Delete ${cat.name}`}
             className="ml-1.5 sm:ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all shrink-0">
             <Trash2 size={12} />
           </button>
+          <ChevronRight size={13} className="ml-1 text-gray-300 dark:text-gray-600 shrink-0" aria-hidden="true" />
         </div>
       </div>
       {/* Progress bar */}
