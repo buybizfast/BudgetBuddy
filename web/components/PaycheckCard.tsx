@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Trash2, Loader2, X, Pencil, ChevronDown } from 'lucide-react'
+import { Plus, Loader2, X, Pencil, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -46,79 +46,121 @@ function isoDate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function PaycheckRow({ source, amount, edited, onRenameOccurrence, onEditAmount, onReset, onRemove }: {
-  source: string; amount: number; edited: boolean
+function PaycheckRow({ source, amount, date, frequency, edited, onRenameOccurrence, onEditAmount, onReset, onRemove }: {
+  source: string; amount: number; date: string; frequency: string; edited: boolean
   onRenameOccurrence: (newSource: string) => void
   onEditAmount: (newAmount: number) => void
   onReset: () => void
   onRemove: () => void
 }) {
-  const [editingName, setEditingName] = useState(false)
+  const [open, setOpen] = useState(false)
   const [nameInput, setNameInput] = useState(source)
-  const [editingAmount, setEditingAmount] = useState(false)
   const [amountInput, setAmountInput] = useState(String(amount))
 
-  const saveName = () => {
-    setEditingName(false)
-    const trimmed = nameInput.trim()
-    if (trimmed && trimmed !== source) onRenameOccurrence(trimmed)
-    else setNameInput(source)
+  const FREQ_LABEL: Record<string, string> = {
+    weekly: 'every week', biweekly: 'every 2 weeks', semimonthly: 'twice a month', monthly: 'every month',
   }
 
-  const saveAmount = () => {
-    setEditingAmount(false)
-    const parsed = parseFloat(amountInput)
-    if (!isNaN(parsed) && parsed !== amount) onEditAmount(parsed)
-    else setAmountInput(String(amount))
+  const openEditor = () => {
+    setNameInput(source)
+    setAmountInput(String(amount))
+    setOpen(true)
   }
+
+  const save = () => {
+    const trimmed = nameInput.trim()
+    if (trimmed && trimmed !== source) onRenameOccurrence(trimmed)
+    const parsed = parseFloat(amountInput.replace(/[^0-9.]/g, ''))
+    if (!isNaN(parsed) && parsed !== amount) onEditAmount(parsed)
+    setOpen(false)
+  }
+
+  const prettyDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
     <div className="border-t border-gray-100 dark:border-gray-700 group">
-      <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
+      {/* Whole row opens the editor — same pattern as budget category rows. */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Edit ${source}`}
+        onClick={openEditor}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditor() } }}
+        className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+      >
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-4">
-          {editingName ? (
-            <input autoFocus value={nameInput}
-              onChange={e => setNameInput(e.target.value)}
-              onBlur={saveName}
-              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameInput(source); setEditingName(false) } }}
-              className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-blue-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 flex-1" />
-          ) : (
-            <button onClick={() => { setNameInput(source); setEditingName(true) }}
-              className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 truncate text-left transition-colors">
-              {source}
-            </button>
-          )}
+          <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{source}</span>
           {edited && (
-            <button onClick={onReset} title="Revert this occurrence to the schedule default"
-              className="opacity-0 group-hover:opacity-100 shrink-0 text-gray-300 dark:text-gray-600 hover:text-amber-500 transition-all">
-              <Pencil size={11} />
-            </button>
+            <span title="This occurrence was edited away from the schedule default"
+              className="shrink-0 text-amber-500"><Pencil size={11} /></span>
           )}
         </div>
         <div className="flex items-center shrink-0">
-          {editingAmount ? (
-            <div className="flex items-center gap-0.5 w-20 justify-end">
-              <span className="text-gray-400 dark:text-gray-500 text-xs">$</span>
-              <input autoFocus value={amountInput} inputMode="decimal"
-                onChange={e => setAmountInput(e.target.value)}
-                onBlur={saveAmount}
-                onKeyDown={e => { if (e.key === 'Enter') saveAmount(); if (e.key === 'Escape') { setAmountInput(String(amount)); setEditingAmount(false) } }}
-                className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-16 rounded border border-blue-400 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-right" />
-            </div>
-          ) : (
-            <button onClick={() => { setAmountInput(String(amount)); setEditingAmount(true) }}
-              className="text-xs text-blue-600 hover:text-blue-700 w-20 text-right transition-colors font-medium">
-              {fmt(amount)}
-            </button>
-          )}
+          <span className="text-xs text-blue-600 w-20 text-right font-medium">{fmt(amount)}</span>
           <span className="text-xs w-20 text-right text-gray-400 dark:text-gray-500">—</span>
           <span className="text-xs w-20 text-right font-semibold text-gray-400 dark:text-gray-500">—</span>
-          <button onClick={onRemove} aria-label={`Remove ${source}`}
-            className="ml-2 opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all shrink-0">
-            <Trash2 size={12} />
-          </button>
+          <ChevronRight size={13} className="ml-2 text-gray-300 dark:text-gray-600 shrink-0" aria-hidden="true" />
         </div>
       </div>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setOpen(false)}>
+          <div onClick={e => e.stopPropagation()}
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Edit Paycheck</h3>
+              <button onClick={() => setOpen(false)} aria-label="Close"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Arrives {prettyDate} · repeats {FREQ_LABEL[frequency] ?? frequency}. Changes here apply to this
+              occurrence only — the schedule keeps its defaults.
+            </p>
+
+            <div>
+              <label htmlFor="pc-source" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Source</label>
+              <input id="pc-source" value={nameInput} onChange={e => setNameInput(e.target.value)}
+                className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+
+            <div>
+              <label htmlFor="pc-amount" className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Amount</label>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-400 dark:text-gray-500 text-sm">$</span>
+                <input id="pc-amount" value={amountInput} inputMode="decimal" onChange={e => setAmountInput(e.target.value)}
+                  className="flex-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+
+            {edited && (
+              <button onClick={() => { onReset(); setOpen(false) }}
+                className="w-full text-xs font-medium text-amber-600 hover:text-amber-700 bg-amber-50 dark:bg-amber-950/30 rounded-xl py-2 transition-colors">
+                Reset this occurrence to the schedule default
+              </button>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={save}
+                className="flex-1 text-sm py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-colors">
+                Save
+              </button>
+              <button onClick={() => setOpen(false)}
+                className="text-sm px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors">
+                Cancel
+              </button>
+            </div>
+
+            <button
+              onClick={() => { if (confirm(`Remove the "${source}" paycheck schedule? All its future occurrences go with it.`)) { onRemove(); setOpen(false) } }}
+              className="w-full text-xs text-red-500 hover:text-red-600 transition-colors pt-1">
+              Delete this paycheck schedule
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -260,7 +302,8 @@ export function PaycheckCard({ year, month, totalIncome, onSyncIncome }: Props) 
             <p className="px-4 py-4 text-xs text-gray-400 dark:text-gray-500">No paychecks scheduled this month.</p>
           ) : (
             thisMonth.map(({ paycheck, day, date, source: occSource, amount: occAmount, edited }) => (
-              <PaycheckRow key={`${paycheck.id}-${day}`} source={occSource} amount={occAmount} edited={edited}
+              <PaycheckRow key={`${paycheck.id}-${day}`} source={occSource} amount={occAmount} date={date}
+                frequency={paycheck.frequency} edited={edited}
                 onRenameOccurrence={newSource => editOccurrence(paycheck.id, date, { source: newSource })}
                 onEditAmount={newAmount => editOccurrence(paycheck.id, date, { amount: newAmount })}
                 onReset={() => resetOccurrence(paycheck.id, date)}
