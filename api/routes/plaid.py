@@ -10,6 +10,7 @@ from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import PlaidItem, BankAccount
 from backend.services import plaid_service
+from backend.services.plaid_service import is_manual_item_id, manual_item_filter
 
 router = APIRouter(prefix="/api/v1/plaid", tags=["plaid"])
 
@@ -113,7 +114,7 @@ async def list_items(user_id: str = Depends(get_current_user), db: AsyncSession 
         select(PlaidItem).where(
             PlaidItem.user_id == user_id,
             PlaidItem.status.in_(("active", "needs_reauth")),
-            PlaidItem.item_id != f"manual-{user_id}",
+            ~manual_item_filter(),
         )
     )
     items = result.scalars().all()
@@ -128,8 +129,47 @@ async def remove_item(item_id: str, user_id: str = Depends(get_current_user), db
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    if item.item_id == f"manual-{user_id}":
+    if is_manual_item_id(item.item_id):
         raise HTTPException(status_code=400, detail="Cannot disconnect the manual cash account")
     await db.delete(item)
     await db.commit()
     return {"status": "ok"}
+
+
+class ManualBalanceRequest(BaseModel):
+    current_balance: float
+
+
+@router.get("/manual-cash")
+async def get_manual_cash(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """The hand-maintained cash account, if this user has one yet."""
+    result = await db.execute(
+        select(BankAccount).where(
+            BankAccount.user_id == user_id,
+            BankAccount.account_id.in_(("manual-cash", f"manual-cash-{user_id}")),
+        )
+    )
+    acct = result.scalar_one_or_none()
+    if acct is None:
+        return {"exists": False, "current_balance": 0.0}
+    return {"exists": True, "id": str(acct.id), "name": acct.name,
+            "current_balance": float(acct.current_balance)}
+
+
+@router.patch("/manual-cash")
+async def set_manual_cash(body: ManualBalanceRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Set the cash-on-hand balance by hand.
+
+    This account has no bank behind it — nothing can refresh it automatically,
+    so the number is only ever as current as the user makes it.
+    """
+    from api.routes.budget import _get_or_create_cash_account
+
+    account_id = await _get_or_create_cash_account(user_id, db)
+    result = await db.execute(select(BankAccount).where(BankAccount.id == account_id, BankAccount.user_id == user_id))
+    acct = result.scalar_one()
+    acct.current_balance = body.current_balance
+    # available == current for cash: there are no pending holds on a wallet.
+    acct.available_balance = body.current_balance
+    await db.commit()
+    return {"status": "ok", "current_balance": float(acct.current_balance)}

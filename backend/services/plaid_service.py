@@ -44,6 +44,25 @@ except ImportError:
     AccountsBalanceGetRequest = None
 
 
+
+# The manual "Cash / Manual" account is backed by a placeholder PlaidItem whose
+# access_token is the literal string "manual" — it must never be sent to Plaid.
+# Items created before the multi-user migration use the bare id "manual" while
+# newer ones use "manual-<user_id>", and a LIKE "manual-%" filter misses the
+# bare form, which is how a placeholder token reached Plaid every sync cycle.
+MANUAL_ITEM_PREFIX = "manual"
+
+
+def is_manual_item_id(item_id: str | None) -> bool:
+    return bool(item_id) and (item_id == MANUAL_ITEM_PREFIX or item_id.startswith("manual-"))
+
+
+def manual_item_filter():
+    """SQLAlchemy predicate matching every manual placeholder item."""
+    from sqlalchemy import or_
+    return or_(PlaidItem.item_id == MANUAL_ITEM_PREFIX, PlaidItem.item_id.like("manual-%"))
+
+
 def _get_client():
     if not _PLAID_AVAILABLE:
         raise RuntimeError("plaid-python is not installed. Run: pip install plaid-python")
@@ -397,7 +416,7 @@ async def refresh_all_items(db: AsyncSession, user_id: Optional[str] = None) -> 
     from sqlalchemy import update as sa_update
     # "needs_reauth" items are skipped: only the user re-authorizing can fix
     # them, and reauth-complete flips them back to active.
-    query = select(PlaidItem).where(PlaidItem.status == "active", ~PlaidItem.item_id.like("manual-%"))
+    query = select(PlaidItem).where(PlaidItem.status == "active", ~manual_item_filter())
     if user_id is not None:
         query = query.where(PlaidItem.user_id == user_id)
     result = await db.execute(query)

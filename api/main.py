@@ -115,6 +115,19 @@ _SCHEMA_PATCHES = [
     "  END IF; "
     "END $$",
 
+    # --- Manual cash placeholder -------------------------------------------
+    # Pre-multi-user rows use the bare ids "manual" / "manual-cash", which the
+    # LIKE "manual-%" exclusions miss — so the placeholder item was being sent
+    # to Plaid every sync, failing with INVALID_ACCESS_TOKEN because its token
+    # is the literal string "manual". Normalise them to the per-user form and
+    # clear the error state that produced.
+    "UPDATE plaid_items SET item_id = 'manual-' || user_id "
+    "WHERE item_id = 'manual' AND user_id IS NOT NULL",
+    "UPDATE bank_accounts SET account_id = 'manual-cash-' || user_id "
+    "WHERE account_id = 'manual-cash' AND user_id IS NOT NULL",
+    "UPDATE plaid_items SET last_sync_error = NULL, status = 'active' "
+    "WHERE item_id = 'manual' OR item_id LIKE 'manual-%'",
+
     # --- Google sign-in ----------------------------------------------------
     # Google accounts have no password, so the column must allow NULL.
     "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL",

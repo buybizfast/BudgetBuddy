@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Building2, CreditCard, RefreshCw, Loader2, Trash2, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Building2, CreditCard, RefreshCw, Loader2, Trash2, TrendingUp, AlertTriangle, Wallet, Pencil, Check, X } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { PlaidLinkButton } from '@/components/PlaidLinkButton'
 import { ReconnectButton } from '@/components/ReconnectButton'
@@ -22,6 +22,81 @@ function AccountTypeIcon({ type, subtype }: { type: string; subtype: string | nu
   if (type === 'credit') return <CreditCard size={14} className="text-red-500" />
   if (type === 'investment' || type === 'brokerage') return <TrendingUp size={14} className="text-blue-500" />
   return <Building2 size={14} className="text-blue-600" />
+}
+
+
+function ManualCashCard({ onSaved }: { onSaved: () => void }) {
+  const [balance, setBalance] = useState<number | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [input, setInput] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const load = () => {
+    apiFetch<{ current_balance: number }>('/api/v1/plaid/manual-cash')
+      .then(d => setBalance(d.current_balance))
+      .catch(() => setBalance(0))
+  }
+  useEffect(load, [])
+
+  const save = async () => {
+    const parsed = parseFloat(input.replace(/[^0-9.-]/g, ''))
+    if (isNaN(parsed)) { setEditing(false); return }
+    setSaving(true)
+    try {
+      await apiFetch('/api/v1/plaid/manual-cash', {
+        method: 'PATCH',
+        body: JSON.stringify({ current_balance: parsed }),
+      })
+      setBalance(parsed)
+      setEditing(false)
+      onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
+            <Wallet size={16} className="text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Cash on hand</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              No bank behind this one — update it yourself.
+            </p>
+          </div>
+        </div>
+        {editing ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-gray-400 dark:text-gray-500 text-sm">$</span>
+            <input autoFocus value={input} inputMode="decimal"
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
+              className="w-24 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-lg px-2 py-1.5 border border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500 text-right" />
+            <button onClick={save} disabled={saving} aria-label="Save cash balance"
+              className="w-7 h-7 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg flex items-center justify-center transition-colors">
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+            </button>
+            <button onClick={() => setEditing(false)} aria-label="Cancel"
+              className="w-7 h-7 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-300 rounded-lg flex items-center justify-center transition-colors">
+              <X size={13} />
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => { setInput(balance !== null ? String(balance) : ''); setEditing(true) }}
+            className="flex items-center gap-2 shrink-0 group">
+            <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              {balance === null ? '—' : fmt(balance)}
+            </span>
+            <Pencil size={13} className="text-gray-300 dark:text-gray-600 group-hover:text-blue-500 transition-colors" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default function AccountsPage() {
@@ -118,6 +193,8 @@ export default function AccountsPage() {
             </p>
           </div>
         )}
+
+        <ManualCashCard onSaved={refresh} />
 
         {accounts.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
