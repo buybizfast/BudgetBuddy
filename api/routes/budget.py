@@ -67,6 +67,20 @@ async def update_category(category_id: str, body: UpdateCategoryRequest, user_id
     return {"status": "ok"}
 
 
+class SetCategoryDebtRequest(BaseModel):
+    original_balance: Optional[float] = None
+    current_balance: Optional[float] = None
+
+
+@router.patch("/categories/{category_id}/debt")
+async def set_category_debt(category_id: str, body: SetCategoryDebtRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Set payoff figures for a Debt-group category, creating the underlying
+    debt record if this category isn't linked to one yet."""
+    return await budget_service.set_category_debt(
+        user_id, category_id, body.original_balance, body.current_balance, db
+    )
+
+
 @router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     try:

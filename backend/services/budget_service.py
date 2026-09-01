@@ -123,6 +123,11 @@ async def get_budget_month_with_spending(user_id: str, year: int, month: int, db
     bm = result.scalar_one()
     start_date = date(year, month, 1)
     end_date = date(year, month, calendar.monthrange(year, month)[1])
+
+    # Payoff figures for debt-linked categories, so the budget can show what's
+    # actually left to clear rather than just this month's minimum payment.
+    debt_result = await db.execute(select(DebtAccount).where(DebtAccount.user_id == user_id))
+    debts_by_id = {str(d.id): d for d in debt_result.scalars().all()}
     spending_result = await db.execute(
         select(Transaction.budget_category_id, func.sum(Transaction.amount))
         .where(Transaction.user_id == user_id, Transaction.date >= start_date, Transaction.date <= end_date,
@@ -147,10 +152,18 @@ async def get_budget_month_with_spending(user_id: str, year: int, month: int, db
         for cat in group.categories:
             spent = Decimal(str(spending_map.get(str(cat.id), 0)))
             remaining = cat.budgeted - spent
+            linked_debt = debts_by_id.get(str(cat.debt_account_id)) if cat.debt_account_id else None
             cats_data.append({"id": str(cat.id), "name": cat.name, "budgeted": float(cat.budgeted),
                                "spent": float(spent), "remaining": float(remaining), "sort_order": cat.sort_order,
                                "cost_type": cat.cost_type, "is_debt_synced": cat.debt_account_id is not None,
-                               "due_date_day": cat.due_date_day})
+                               "due_date_day": cat.due_date_day,
+                               "group_name": group.name,
+                               "debt_account_id": str(cat.debt_account_id) if cat.debt_account_id else None,
+                               "debt_balance": float(linked_debt.balance) if linked_debt else None,
+                               "debt_original_balance": (
+                                   float(linked_debt.original_balance)
+                                   if linked_debt and linked_debt.original_balance is not None else None
+                               )})
             group_budgeted += cat.budgeted
             group_spent += spent
             # The Income group tracks incoming money, not planned spending —
@@ -343,3 +356,68 @@ async def update_category_due_date(user_id: str, category_id: str, due_date_day:
         return
     cat.due_date_day = due_date_day if due_date_day and 1 <= due_date_day <= 31 else None
     await db.commit()
+
+
+async def set_category_debt(
+    user_id: str, category_id: str, original_balance: float | None,
+    current_balance: float | None, db: AsyncSession,
+) -> dict[str, Any]:
+    """Set the payoff figures for a budget category in the Debt group.
+
+    Balances live on DebtAccount, not on the category — the Debt page, payoff
+    forecast, net worth, and Baby Steps all read from there. A category that
+    isn't linked to a debt yet gets one created and linked, so entering a
+    balance from the budget produces a real debt rather than a second,
+    divergent copy of the number.
+    """
+    result = await db.execute(
+        select(BudgetCategory).where(BudgetCategory.id == category_id, BudgetCategory.user_id == user_id)
+    )
+    cat = result.scalar_one_or_none()
+    if cat is None:
+        return {"status": "not_found"}
+
+    debt = None
+    if cat.debt_account_id:
+        d_result = await db.execute(
+            select(DebtAccount).where(DebtAccount.id == cat.debt_account_id, DebtAccount.user_id == user_id)
+        )
+        debt = d_result.scalar_one_or_none()
+
+    if debt is None:
+        if not current_balance and not original_balance:
+            return {"status": "nothing_to_do"}
+        sort_result = await db.execute(
+            select(DebtAccount).where(DebtAccount.user_id == user_id)
+            .order_by(DebtAccount.sort_order.desc()).limit(1)
+        )
+        last = sort_result.scalar_one_or_none()
+        debt = DebtAccount(
+            user_id=user_id, name=cat.name,
+            balance=Decimal(str(current_balance or 0)),
+            minimum_payment=cat.budgeted or Decimal("0"),
+            interest_rate=Decimal("0"),
+            sort_order=(last.sort_order + 1) if last else 0,
+            account_type="loan",
+            due_date_day=cat.due_date_day,
+        )
+        db.add(debt)
+        await db.flush()
+        cat.debt_account_id = debt.id
+
+    if current_balance is not None:
+        debt.balance = Decimal(str(current_balance))
+    if original_balance is not None:
+        debt.original_balance = Decimal(str(original_balance))
+    # An original below the current balance would render negative progress.
+    if debt.original_balance is not None and debt.original_balance < debt.balance:
+        debt.original_balance = debt.balance
+    debt.is_paid_off = debt.balance <= 0
+
+    await db.commit()
+    return {
+        "status": "ok",
+        "debt_account_id": str(debt.id),
+        "balance": float(debt.balance),
+        "original_balance": float(debt.original_balance) if debt.original_balance is not None else None,
+    }

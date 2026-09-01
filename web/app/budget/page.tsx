@@ -34,7 +34,7 @@ export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
-  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, updateCategoryDueDate, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
+  const { budget, loading, error, updateIncome, updateCategory, renameCategory, updateCategoryCostType, updateCategoryDueDate, updateCategoryDebt, deleteCategory, reorderCategories, reorderGroups, addCategory, syncStatus, syncNow, autoCategorize, recentTransactions } = useBudget(year, month)
   const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null)
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null)
   const [editingIncome, setEditingIncome] = useState(false)
@@ -529,6 +529,7 @@ export default function BudgetPage() {
           onSetBudget={updateCategory}
           onSetCostType={updateCategoryCostType}
           onSetDueDate={updateCategoryDueDate}
+          onSetDebt={updateCategoryDebt}
           onUpsertAlert={upsertAlert}
           onDeleteAlert={deleteAlert}
           onDelete={deleteCategory}
@@ -779,6 +780,14 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
               Debt synced
             </span>
           )}
+          {cat.debt_balance != null && cat.debt_balance > 0 && (
+            <span title={cat.debt_original_balance != null
+              ? `${fmt2(cat.debt_balance)} left of ${fmt2(cat.debt_original_balance)}`
+              : `${fmt2(cat.debt_balance)} left to pay off`}
+              className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300">
+              {fmt(cat.debt_balance)} left
+            </span>
+          )}
           {cat.due_date_day && (
             <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300">
               <CalendarClock size={9} />{ordinalDay(cat.due_date_day)}
@@ -831,7 +840,7 @@ function CategoryRow({ cat, editing, input, onStartEdit, onInputChange, onSave, 
   )
 }
 
-function CategoryDetailModal({ cat, alert, onClose, onRename, onSetBudget, onSetCostType, onSetDueDate, onUpsertAlert, onDeleteAlert, onDelete }: {
+function CategoryDetailModal({ cat, alert, onClose, onRename, onSetBudget, onSetCostType, onSetDueDate, onSetDebt, onUpsertAlert, onDeleteAlert, onDelete }: {
   cat: BudgetCategory
   alert?: SpendingAlert
   onClose: () => void
@@ -839,6 +848,7 @@ function CategoryDetailModal({ cat, alert, onClose, onRename, onSetBudget, onSet
   onSetBudget: (id: string, amount: number) => void
   onSetCostType: (id: string, t: 'fixed' | 'variable') => void
   onSetDueDate: (id: string, day: number | null) => void
+  onSetDebt: (id: string, original: number | null, current: number | null) => void
   onUpsertAlert: (id: string, threshold: number) => void
   onDeleteAlert: (id: string) => void
   onDelete: (id: string) => void
@@ -847,9 +857,17 @@ function CategoryDetailModal({ cat, alert, onClose, onRename, onSetBudget, onSet
   const [amount, setAmount] = useState(cat.budgeted ? String(cat.budgeted) : '')
   const [costType, setCostType] = useState(cat.cost_type)
   const [dueDay, setDueDay] = useState<number | null>(cat.due_date_day)
+  const [origBal, setOrigBal] = useState(cat.debt_original_balance != null ? String(cat.debt_original_balance) : '')
+  const [currBal, setCurrBal] = useState(cat.debt_balance != null ? String(cat.debt_balance) : '')
   const [alertOn, setAlertOn] = useState(!!alert?.enabled)
   const [threshold, setThreshold] = useState(String(alert?.threshold_pct ?? 80))
   const [saving, setSaving] = useState(false)
+
+  const isDebtGroup = cat.group_name === 'Debt' || cat.is_debt_synced
+  const origNum = parseFloat(origBal.replace(/[^0-9.]/g, ''))
+  const currNum = parseFloat(currBal.replace(/[^0-9.]/g, ''))
+  const paidOff = !isNaN(origNum) && !isNaN(currNum) ? Math.max(0, origNum - currNum) : null
+  const payoffPct = paidOff !== null && origNum > 0 ? Math.min(100, (paidOff / origNum) * 100) : null
 
   // Anchored on the current month so a picked date maps to the month shown.
   const today = new Date()
@@ -865,6 +883,13 @@ function CategoryDetailModal({ cat, alert, onClose, onRename, onSetBudget, onSet
     if (!isNaN(parsed) && parsed !== cat.budgeted) onSetBudget(cat.id, parsed)
     if (costType !== cat.cost_type) onSetCostType(cat.id, costType)
     if (dueDay !== cat.due_date_day) onSetDueDate(cat.id, dueDay)
+    if (isDebtGroup) {
+      const o = origBal === '' ? null : parseFloat(origBal.replace(/[^0-9.]/g, ''))
+      const c = currBal === '' ? null : parseFloat(currBal.replace(/[^0-9.]/g, ''))
+      const oChanged = (o ?? null) !== (cat.debt_original_balance ?? null)
+      const cChanged = (c ?? null) !== (cat.debt_balance ?? null)
+      if (oChanged || cChanged) onSetDebt(cat.id, Number.isNaN(o as number) ? null : o, Number.isNaN(c as number) ? null : c)
+    }
     if (alertOn) onUpsertAlert(cat.id, parseInt(threshold) || 80)
     else if (alert?.enabled) onDeleteAlert(cat.id)
     onClose()
@@ -925,6 +950,47 @@ function CategoryDetailModal({ cat, alert, onClose, onRename, onSetBudget, onSet
             )}
           </div>
         </div>
+
+        {isDebtGroup && (
+          <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Payoff</p>
+              {currNum > 0 && (
+                <p className="text-xs font-bold text-red-500">{fmt2(currNum)} to go</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="cat-orig" className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Original amount</label>
+                <input id="cat-orig" value={origBal} inputMode="decimal" onChange={e => setOrigBal(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-lg px-2 py-1.5 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label htmlFor="cat-curr" className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Current balance</label>
+                <input id="cat-curr" value={currBal} inputMode="decimal" onChange={e => setCurrBal(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm rounded-lg px-2 py-1.5 border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+
+            {payoffPct !== null && (
+              <div>
+                <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${payoffPct}%` }} />
+                </div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+                  {fmt2(paidOff ?? 0)} paid off — {payoffPct.toFixed(0)}% of {fmt2(origNum)}
+                </p>
+              </div>
+            )}
+
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              Shared with the Debt page, payoff forecast, and net worth.
+            </p>
+          </div>
+        )}
 
         <div>
           <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">Cost type</span>
