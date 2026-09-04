@@ -104,6 +104,7 @@ export default function AccountsPage() {
   const [syncing, setSyncing] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
   const [debts, setDebts] = useState<DebtSummary[]>([])
 
   useEffect(() => {
@@ -117,7 +118,18 @@ export default function AccountsPage() {
 
   const handleRemove = async (id: string) => {
     setRemovingId(id)
-    try { await removeItem(id) } finally { setRemovingId(null); setConfirmRemove(null) }
+    setRemoveError(null)
+    try {
+      await removeItem(id)
+      setConfirmRemove(null)
+    } catch (e: any) {
+      // Surface the failure instead of silently leaving the account in
+      // place — a bare fetch() never throws on a 4xx/5xx response, so
+      // without this a failed disconnect looked identical to a no-op.
+      setRemoveError(e?.message || 'Could not disconnect this account')
+    } finally {
+      setRemovingId(null)
+    }
   }
 
   const byInstitution: Record<string, typeof accounts> = {}
@@ -244,6 +256,11 @@ export default function AccountsPage() {
                       </div>
                     )}
                   </div>
+                  {confirmRemove === item?.id && removeError && (
+                    <div className="px-4 py-2 bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900 text-xs text-red-700 dark:text-red-300">
+                      {removeError}
+                    </div>
+                  )}
                   {item?.last_sync_error && (
                     <div className="px-4 py-2.5 bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900 flex items-center justify-between gap-3">
                       <p className="text-xs text-red-700 dark:text-red-300 min-w-0">

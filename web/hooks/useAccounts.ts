@@ -59,7 +59,11 @@ export function useAccounts() {
   }
 
   const removeItem = async (id: string) => {
-    await fetch(`${BASE}/api/v1/plaid/items/${id}`, { method: 'DELETE', headers: { ...authHeaders() } })
+    const res = await fetch(`${BASE}/api/v1/plaid/items/${id}`, { method: 'DELETE', headers: { ...authHeaders() } })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(typeof err.detail === 'string' ? err.detail : `Could not disconnect (${res.status})`)
+    }
     await refresh()
   }
 
