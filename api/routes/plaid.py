@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from api.auth import get_current_user
 from backend.db.base import get_session
-from backend.db.models import PlaidItem, BankAccount
+from backend.db.models import PlaidItem, BankAccount, DebtAccount
 from backend.services import plaid_service
 from backend.services.plaid_service import is_manual_item_id, manual_item_filter
 
@@ -131,6 +131,22 @@ async def remove_item(item_id: str, user_id: str = Depends(get_current_user), db
         raise HTTPException(status_code=404, detail="Item not found")
     if is_manual_item_id(item.item_id):
         raise HTTPException(status_code=400, detail="Cannot disconnect the manual cash account")
+
+    # Credit cards/loans auto-synced from this item's accounts would otherwise
+    # survive the disconnect: BankAccount cascade-deletes with the item, but
+    # DebtAccount.bank_account_id is ON DELETE SET NULL, so the debt lingers
+    # looking like a manually-added one with a frozen balance. Dismiss it —
+    # same as manually deleting a synced debt — rather than losing payment
+    # history to a hard delete.
+    accts_result = await db.execute(select(BankAccount.id).where(BankAccount.plaid_item_id == item.id))
+    account_ids = [row[0] for row in accts_result.all()]
+    if account_ids:
+        debts_result = await db.execute(
+            select(DebtAccount).where(DebtAccount.bank_account_id.in_(account_ids), DebtAccount.user_id == user_id)
+        )
+        for debt in debts_result.scalars().all():
+            debt.dismissed = True
+
     await db.delete(item)
     await db.commit()
     return {"status": "ok"}
