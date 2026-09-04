@@ -63,6 +63,34 @@ def manual_item_filter():
     return or_(PlaidItem.item_id == MANUAL_ITEM_PREFIX, PlaidItem.item_id.like("manual-%"))
 
 
+
+def _plaid_error_code(exc: Exception) -> str | None:
+    """Pull Plaid's error_code out of an SDK exception's JSON body."""
+    import json
+    import re
+    body = getattr(exc, "body", None) or str(exc)
+    try:
+        return json.loads(body).get("error_code")
+    except Exception:
+        m = re.search(r'"error_code":\s*"([A-Z_]+)"', str(body))
+        return m.group(1) if m else None
+
+
+def _log_product_unavailable(product: str, plaid_item: PlaidItem, exc: Exception, consequence: str) -> None:
+    """Log an unusable Plaid product concisely.
+
+    A product the client isn't authorized for fails identically on every item,
+    every sync — dumping the full HTTP response each time buries everything
+    else. Unexpected failures still log in full, since those are worth reading.
+    """
+    if _plaid_error_code(exc) == "INVALID_PRODUCT":
+        log.info("Plaid %s product not enabled for this client — %s (%s)",
+                 product, consequence, plaid_item.institution_name or plaid_item.id)
+    else:
+        log.warning("Plaid %s call failed for %s: %s",
+                    product, plaid_item.institution_name or plaid_item.id, exc)
+
+
 def _get_client():
     if not _PLAID_AVAILABLE:
         raise RuntimeError("plaid-python is not installed. Run: pip install plaid-python")
@@ -197,7 +225,7 @@ async def _sync_accounts(client, plaid_item: PlaidItem, db: AsyncSession) -> Non
         try:
             response = client.accounts_balance_get(AccountsBalanceGetRequest(access_token=plaid_item.access_token))
         except Exception as exc:
-            log.warning("Live balance pull failed for item %s, falling back to cached balances: %s", plaid_item.id, exc)
+            _log_product_unavailable("balance", plaid_item, exc, "using cached balances")
     if response is None:
         response = client.accounts_get(AccountsGetRequest(access_token=plaid_item.access_token))
     for acct in response["accounts"]:
@@ -262,7 +290,7 @@ async def _sync_liabilities(client, plaid_item: PlaidItem, db: AsyncSession) -> 
     try:
         response = client.liabilities_get(LiabilitiesGetRequest(access_token=plaid_item.access_token))
     except Exception as exc:
-        log.info("liabilities_get unavailable for item %s: %s", plaid_item.id, exc)
+        _log_product_unavailable("liabilities", plaid_item, exc, "APR/minimum payment/due dates not synced")
         return
 
     liabilities = response.get("liabilities") or {}
