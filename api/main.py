@@ -29,6 +29,7 @@ from api.routes import safe_to_spend as safe_to_spend_router
 from api.routes import digest as digest_router
 from api.routes import insights as insights_router
 from api.routes import cashflow as cashflow_router
+from api.routes import onboarding as onboarding_router
 from api.ws_manager import ws_manager
 from sqlalchemy import select, text
 
@@ -343,6 +344,7 @@ app.include_router(safe_to_spend_router.router, **_protected)
 app.include_router(digest_router.router, **_protected)
 app.include_router(insights_router.router, **_protected)
 app.include_router(cashflow_router.router, **_protected)
+app.include_router(onboarding_router.router, **_protected)
 
 @app.get("/", tags=["health"])
 async def health():

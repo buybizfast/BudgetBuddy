@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   PiggyBank, Receipt, Building2, Target, CreditCard, CalendarDays,
-  RefreshCw, BarChart2, ChevronRight, LogOut, TrendingDown, TrendingUp, Wallet, Bell, Shield, LineChart, FileText, Sparkles,
+  RefreshCw, BarChart2, ChevronRight, LogOut, TrendingDown, TrendingUp, Wallet, Bell, Shield, LineChart, FileText, Sparkles, CheckCircle2, Circle,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { clearToken } from '@/lib/auth'
@@ -39,6 +39,37 @@ function ProgressBar({ value, max, color = 'bg-blue-500' }: { value: number; max
   return (
     <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
       <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
+interface OnboardingStep { key: string; label: string; href: string; done: boolean }
+interface OnboardingProgress { steps: OnboardingStep[]; done_count: number; total_count: number; complete: boolean }
+
+function OnboardingCard({ progress }: { progress: OnboardingProgress }) {
+  return (
+    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-sm">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-lg font-bold">Welcome to Budget Buddy 👋</h2>
+        <span className="text-xs font-semibold bg-white/20 rounded-full px-2.5 py-1 shrink-0">
+          {progress.done_count} of {progress.total_count} done
+        </span>
+      </div>
+      <p className="text-sm text-blue-100 mb-4">Finish setup and your dashboard fills itself in.</p>
+      <ProgressBar value={progress.done_count} max={progress.total_count} color="bg-white" />
+      <ol className="space-y-2.5 mt-4">
+        {progress.steps.map(step => (
+          <li key={step.key}>
+            <Link href={step.href} className="flex items-center gap-2.5 text-sm group">
+              {step.done
+                ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" />
+                : <Circle size={18} className="shrink-0 text-white/40" />}
+              <span className={cn('font-medium', step.done && 'line-through text-blue-200')}>{step.label}</span>
+              {!step.done && <ChevronRight size={14} className="text-white/50 group-hover:text-white ml-auto shrink-0" />}
+            </Link>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
@@ -151,6 +182,7 @@ export default function TodayPage() {
   const [safeToSpend, setSafeToSpend] = useState<any>(null)
   const [alerts, setAlerts] = useState<any[]>([])
   const [bankCount, setBankCount] = useState<number | null>(null)
+  const [onboarding, setOnboarding] = useState<OnboardingProgress | null>(null)
   const [babyStep, setBabyStep] = useState<any>(null)
   const [notifPermission, setNotifPermission] = useState<string>('unsupported')
   const { bills: upcomingBills } = useUpcomingBills(7)
@@ -165,6 +197,7 @@ export default function TodayPage() {
     apiFetch<any[]>('/api/v1/insights/alerts').then(setAlerts).catch(() => {})
     apiFetch<any[]>('/api/v1/plaid/accounts').then(a => setBankCount(a.length)).catch(() => setBankCount(0))
     apiFetch<any>('/api/v1/insights/baby-step').then(setBabyStep).catch(() => {})
+    apiFetch<OnboardingProgress>('/api/v1/onboarding/progress').then(setOnboarding).catch(() => {})
   }, [year, month])
 
   useEffect(() => {
@@ -237,38 +270,10 @@ export default function TodayPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
 
-        {/* First run — a brand new account is all zeros, so say what to do
-            rather than leaving people staring at an empty dashboard. */}
-        {bankCount === 0 && (
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-sm">
-            <h2 className="text-lg font-bold mb-1">Welcome to Budget Buddy 👋</h2>
-            <p className="text-sm text-blue-100 mb-4">
-              Three quick steps and your dashboard fills itself in.
-            </p>
-            <ol className="space-y-2.5 mb-4">
-              <li className="flex items-start gap-2.5 text-sm">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">1</span>
-                <span><span className="font-semibold">Connect your bank</span> — transactions, balances, and debts import automatically.</span>
-              </li>
-              <li className="flex items-start gap-2.5 text-sm">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">2</span>
-                <span><span className="font-semibold">Add your paychecks</span> — powers Safe to Spend and the cash-flow forecast.</span>
-              </li>
-              <li className="flex items-start gap-2.5 text-sm">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">3</span>
-                <span><span className="font-semibold">Set your budget</span> — give every dollar a job for the month.</span>
-              </li>
-            </ol>
-            <div className="flex flex-wrap gap-2">
-              <Link href="/accounts" className="text-sm font-semibold bg-white text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-50 transition-colors">
-                Connect a bank
-              </Link>
-              <Link href="/budget" className="text-sm font-semibold bg-white/15 text-white px-4 py-2 rounded-xl hover:bg-white/25 transition-colors">
-                Set up budget
-              </Link>
-            </div>
-          </div>
-        )}
+        {/* Onboarding checklist — a brand new account is all zeros, so show
+            real setup progress rather than leaving people staring at an
+            empty dashboard. Stays visible until every step is done. */}
+        {onboarding && !onboarding.complete && <OnboardingCard progress={onboarding} />}
 
         {/* Safe to Spend */}
         {safeToSpend && bankCount !== 0 && (

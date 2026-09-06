@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Receipt, Filter, Plus, X, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Receipt, Filter, Plus, X, Trash2, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { PageHeader } from '@/components/PageHeader'
@@ -54,6 +54,10 @@ export default function TransactionsPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', amount: '', date: today, budget_category_id: '', type: 'expense' })
   const [saving, setSaving] = useState(false)
+  const [subs, setSubs] = useState<{ merchant: string; status: string }[]>([])
+  const [recurTx, setRecurTx] = useState<Transaction | null>(null)
+  const [recurCadence, setRecurCadence] = useState('monthly')
+  const [recurSaving, setRecurSaving] = useState(false)
 
   const navMonth = (dir: number) => {
     let m = month + dir, y = year
@@ -90,6 +94,35 @@ export default function TransactionsPage() {
   }, [year, month])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  const fetchSubs = useCallback(() => {
+    apiFetch<any[]>('/api/v1/subscriptions/').then(setSubs).catch(() => {})
+  }, [])
+  useEffect(() => { fetchSubs() }, [fetchSubs])
+
+  const isRecurring = (tx: Transaction) => {
+    const name = (tx.merchant_name || tx.name).toLowerCase()
+    return subs.some(s => s.status === 'active' && s.merchant.toLowerCase() === name)
+  }
+
+  const markRecurring = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!recurTx) return
+    setRecurSaving(true)
+    try {
+      await apiFetch('/api/v1/subscriptions/', {
+        method: 'POST',
+        body: JSON.stringify({
+          merchant: recurTx.merchant_name || recurTx.name,
+          amount: Math.abs(recurTx.amount),
+          cadence: recurCadence,
+        }),
+      })
+      setRecurTx(null)
+      setRecurCadence('monthly')
+      await fetchSubs()
+    } catch {} finally { setRecurSaving(false) }
+  }
 
   const addTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -254,6 +287,41 @@ export default function TransactionsPage() {
         </div>
       )}
 
+      {/* Mark as recurring modal */}
+      {recurTx && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0" role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="recur-title" className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 id="recur-title" className="text-base font-bold text-gray-900 dark:text-gray-100">Mark as Recurring</h2>
+              <button onClick={() => setRecurTx(null)} aria-label="Close form" className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <X size={16} aria-hidden="true" className="text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <span className="font-semibold text-gray-900 dark:text-gray-100">{recurTx.merchant_name || recurTx.name}</span>
+              {' — '}{fmt(Math.abs(recurTx.amount))} will show up as a recurring bill going forward.
+            </p>
+            <form onSubmit={markRecurring} className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">How often does this repeat?</label>
+                <select value={recurCadence} onChange={e => setRecurCadence(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Every 2 weeks</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Every 3 months</option>
+                  <option value="annual">Yearly</option>
+                </select>
+              </div>
+              <button type="submit" disabled={recurSaving}
+                className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
+                {recurSaving ? 'Saving…' : 'Mark as Recurring'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
@@ -347,6 +415,13 @@ export default function TransactionsPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {!isTransfer(tx) && tx.amount > 0 && !isRecurring(tx) && (
+                        <button onClick={() => setRecurTx(tx)} aria-label="Mark as recurring"
+                          title="Mark as recurring"
+                          className="p-1 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-gray-300 dark:text-gray-600 hover:text-teal-500 transition-colors">
+                          <RefreshCw size={13} />
+                        </button>
+                      )}
                       {(tx as any).is_manual && (
                         <button onClick={() => deleteTransaction(tx.id)} aria-label="Delete transaction"
                           className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors">
