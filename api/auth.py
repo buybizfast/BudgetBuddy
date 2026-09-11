@@ -70,8 +70,11 @@ async def get_current_user(
     return user_id
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[User]:
-    result = await db.execute(select(User).where(User.email == email.lower().strip()))
+async def authenticate_user(db: AsyncSession, identifier: str, password: str) -> Optional[User]:
+    """Looks the user up by email or username — whichever the identifier
+    matches — so the same login field works for either."""
+    identifier = identifier.lower().strip()
+    result = await db.execute(select(User).where((User.email == identifier) | (User.username == identifier)))
     user = result.scalar_one_or_none()
     # Google-only accounts have no password_hash — they can't be authenticated
     # this way, and must not fall through to a hash comparison against None.
@@ -82,8 +85,12 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> Opti
     return user
 
 
-async def create_user(db: AsyncSession, email: str, password: str) -> User:
-    user = User(email=email.lower().strip(), password_hash=hash_password(password))
+async def create_user(db: AsyncSession, email: str, password: str, username: str | None = None) -> User:
+    user = User(
+        email=email.lower().strip(),
+        password_hash=hash_password(password),
+        username=username.lower().strip() if username else None,
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)

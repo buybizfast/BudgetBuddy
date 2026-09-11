@@ -29,6 +29,10 @@ class User(Base):
     # Google account's email can change while the subject never does.
     google_sub = Column(String(64), unique=True, nullable=True, index=True)
     email_verified = Column(Boolean, nullable=False, default=False)
+    # Optional alternate login handle. Nullable so pre-existing accounts (and
+    # Google sign-ups, which don't collect one) can keep working with email
+    # alone until they set one.
+    username = Column(String(30), unique=True, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 

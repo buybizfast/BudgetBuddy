@@ -12,6 +12,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 export default function SignupPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [inviteCode, setInviteCode] = useState('')
@@ -39,7 +40,7 @@ export default function SignupPage() {
       const res = await fetch(`${BASE}/api/v1/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, invite_code: inviteCode || undefined }),
+        body: JSON.stringify({ email, username, password, invite_code: inviteCode || undefined }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -87,6 +88,25 @@ export default function SignupPage() {
               className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="you@example.com"
             />
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="username" className="text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+            <input
+              id="username"
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={e => setUsername(e.target.value.toLowerCase())}
+              required
+              minLength={3}
+              maxLength={20}
+              pattern="[a-z0-9_]+"
+              title="3-20 characters: letters, numbers, and underscores only"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. jrmn_potts"
+            />
+            <p className="text-xs text-gray-400 dark:text-gray-500">You can sign in with this instead of your email.</p>
           </div>
 
           <div className="space-y-1">

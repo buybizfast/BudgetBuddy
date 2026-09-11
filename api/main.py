@@ -138,6 +138,14 @@ _SCHEMA_PATCHES = [
     "    ALTER TABLE users ADD CONSTRAINT users_google_sub_key UNIQUE (google_sub); "
     "  END IF; "
     "END $$",
+
+    # --- Username login ------------------------------------------------------
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(30)",
+    "DO $$ BEGIN "
+    "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_username_key') THEN "
+    "    ALTER TABLE users ADD CONSTRAINT users_username_key UNIQUE (username); "
+    "  END IF; "
+    "END $$",
 ]
 
 # Applied once claim_legacy_data() has backfilled user_id on every

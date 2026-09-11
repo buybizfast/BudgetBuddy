@@ -64,9 +64,9 @@ export function GoogleSignInButton({ clientId, inviteCode, onError }: Props) {
           const err = await res.json().catch(() => ({}))
           throw new Error(typeof err.detail === 'string' ? err.detail : 'Google sign-in failed')
         }
-        const { access_token } = await res.json()
+        const { access_token, needs_username } = await res.json()
         setToken(access_token)
-        router.push('/')
+        router.push(needs_username ? '/choose-username' : '/')
       } catch (e: any) {
         onError(e?.message || 'Google sign-in failed')
       } finally {

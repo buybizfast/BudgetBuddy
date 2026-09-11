@@ -11,7 +11,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -32,16 +32,16 @@ export default function LoginPage() {
       const res = await fetch(`${BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        setError(err.detail || 'Invalid email or password')
+        setError(err.detail || 'Invalid email/username or password')
         return
       }
-      const { access_token } = await res.json()
+      const { access_token, needs_username } = await res.json()
       setToken(access_token)
-      router.push('/')
+      router.push(needs_username ? '/choose-username' : '/')
     } catch {
       setError(`Could not reach the server at ${BASE}. It may be down, or NEXT_PUBLIC_API_URL may be misconfigured.`)
     } finally {
@@ -68,16 +68,16 @@ export default function LoginPage() {
           )}
 
           <div className="space-y-1">
-            <label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+            <label htmlFor="identifier" className="text-sm font-medium text-gray-700 dark:text-gray-300">Email or username</label>
             <input
-              id="email"
-              type="email"
+              id="identifier"
+              type="text"
               autoComplete="username"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              value={identifier}
+              onChange={e => setIdentifier(e.target.value)}
               required
               className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@example.com"
+              placeholder="you@example.com or username"
             />
           </div>
 

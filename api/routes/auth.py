@@ -23,10 +23,19 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 _limiter = Limiter(key_func=get_remote_address)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,20}$")
+
+
+def _validate_username(v: str) -> str:
+    v = v.strip().lower()
+    if not _USERNAME_RE.match(v):
+        raise ValueError("Username must be 3-20 characters: letters, numbers, and underscores only")
+    return v
 
 
 class SignupRequest(BaseModel):
     email: str
+    username: str
     password: str
     invite_code: str | None = None
 
@@ -38,6 +47,11 @@ class SignupRequest(BaseModel):
             raise ValueError("Enter a valid email address")
         return v
 
+    @field_validator("username")
+    @classmethod
+    def valid_username(cls, v: str) -> str:
+        return _validate_username(v)
+
     @field_validator("password")
     @classmethod
     def valid_password(cls, v: str) -> str:
@@ -47,13 +61,17 @@ class SignupRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str
+    identifier: str
     password: str
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # True when this account has no username yet (pre-existing accounts,
+    # or ones created through Google) — the client should prompt for one
+    # before treating login as fully complete.
+    needs_username: bool = False
 
 
 @router.get("/config")
@@ -153,7 +171,7 @@ async def google_auth(request: Request, body: GoogleAuthRequest, db: AsyncSessio
         except Exception:
             pass
 
-    return TokenResponse(access_token=create_token(user.id))
+    return TokenResponse(access_token=create_token(user.id), needs_username=user.username is None)
 
 
 @router.post("/signup", response_model=TokenResponse)
@@ -167,6 +185,10 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with that email already exists")
+
+    result = await db.execute(select(User).where(User.username == body.username))
+    if result.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That username is already taken")
 
     from api.main import claim_legacy_data, has_unclaimed_data
 
@@ -184,7 +206,7 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
     except Exception:
         should_claim = False
 
-    user = await create_user(db, body.email, body.password)
+    user = await create_user(db, body.email, body.password, body.username)
 
     if should_claim:
         try:
@@ -202,10 +224,34 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
 @router.post("/login", response_model=TokenResponse)
 @_limiter.limit("10/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_session)):
-    user = await authenticate_user(db, body.email, body.password)
+    user = await authenticate_user(db, body.identifier, body.password)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-    return TokenResponse(access_token=create_token(user.id))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email/username or password")
+    return TokenResponse(access_token=create_token(user.id), needs_username=user.username is None)
+
+
+class SetUsernameRequest(BaseModel):
+    username: str
+
+    @field_validator("username")
+    @classmethod
+    def valid_username(cls, v: str) -> str:
+        return _validate_username(v)
+
+
+@router.patch("/username")
+@_limiter.limit("10/minute")
+async def set_username(request: Request, body: SetUsernameRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    result = await db.execute(select(User).where(User.username == body.username))
+    existing = result.scalar_one_or_none()
+    if existing is not None and existing.id != user_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That username is already taken")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one()
+    user.username = body.username
+    await db.commit()
+    return {"status": "ok", "username": user.username}
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -270,4 +316,4 @@ async def delete_account(user_id: str = Depends(get_current_user), db: AsyncSess
 async def me(user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one()
-    return {"id": user.id, "email": user.email}
+    return {"id": user.id, "email": user.email, "username": user.username}
