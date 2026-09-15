@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { Plus, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/auth'
+import { isNative, openInSystemBrowser, closeSystemBrowser, waitForDeepLink } from '@/lib/native'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -35,10 +36,41 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
     },
   })
 
+  // Native shell: Plaid Hosted Link in the system browser. Bank OAuth pages
+  // won't load inside an app webview, and the browser can't hand a
+  // public_token back — so the app waits for the deep link, then asks the
+  // server to finish the session.
+  const connectNative = useCallback(async () => {
+    const token = getToken()
+    const res = await fetch(`${BASE}/api/v1/plaid/link-token?hosted=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('Could not get link token')
+    const { link_token, hosted_link_url } = await res.json()
+    if (!hosted_link_url) throw new Error('Hosted Link is not enabled for this Plaid account')
+
+    const returned = waitForDeepLink('plaid-return')
+    await openInSystemBrowser(hosted_link_url)
+    if (!(await returned)) return // closed the browser without finishing
+    await closeSystemBrowser()
+
+    const done = await fetch(`${BASE}/api/v1/plaid/hosted-link/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ link_token }),
+    })
+    if (!done.ok) {
+      const err = await done.json().catch(() => ({}))
+      throw new Error(typeof err.detail === 'string' ? err.detail : 'Failed to connect account.')
+    }
+    onSuccess()
+  }, [onSuccess])
+
   const handleClick = useCallback(async () => {
-    if (linkToken && ready) { open(); return }
+    if (!isNative() && linkToken && ready) { open(); return }
     setFetching(true); setError(null)
     try {
+      if (isNative()) { await connectNative(); return }
       const token = getToken()
       const res = await fetch(`${BASE}/api/v1/plaid/link-token`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -50,7 +82,7 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
     } catch (e: any) {
       setError(e.message || 'Failed to initialize bank connection')
     } finally { setFetching(false) }
-  }, [linkToken, ready, open])
+  }, [linkToken, ready, open, connectNative])
 
   useEffect(() => { if (ready && linkToken) open() }, [ready, linkToken, open])
 

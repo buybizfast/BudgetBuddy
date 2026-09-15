@@ -1,8 +1,12 @@
 'use client'
 import { useEffect } from 'react'
+import { isNative } from '@/lib/native'
 
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
+    // The native shell already ships the app bundle offline — a service
+    // worker there would only add a second, stale cache layer.
+    if (isNative()) return
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
       navigator.serviceWorker.register('/sw.js').catch(() => {})
     }

@@ -16,30 +16,50 @@ router = APIRouter(prefix="/api/v1/plaid", tags=["plaid"])
 
 
 @router.get("/link-token")
-async def get_link_token(user_id: str = Depends(get_current_user)):
+async def get_link_token(hosted: bool = False, user_id: str = Depends(get_current_user)):
+    """`hosted=true` is what the native app asks for: Plaid Hosted Link runs
+    in the system browser (so bank OAuth pages work) and deep-links back
+    into the app when done, instead of embedding Link in a webview."""
     try:
-        token = await plaid_service.create_link_token(user_id)
-        return {"link_token": token}
+        return await plaid_service.create_link_token(user_id, hosted=hosted)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+class HostedLinkComplete(BaseModel):
+    link_token: str
+
+
+@router.post("/hosted-link/complete")
+async def hosted_link_complete(body: HostedLinkComplete, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Called by the native app once it's deep-linked back from Hosted Link."""
+    try:
+        return await plaid_service.complete_hosted_link(body.link_token, user_id, db)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
 
 @router.get("/items/{item_id}/update-token")
-async def get_update_link_token(item_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def get_update_link_token(item_id: str, hosted: bool = False, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Link token for re-authorizing an existing connection in update mode."""
     result = await db.execute(select(PlaidItem).where(PlaidItem.id == item_id, PlaidItem.user_id == user_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Connection not found")
     try:
-        token = await plaid_service.create_update_link_token(item)
-        return {"link_token": token}
+        return await plaid_service.create_update_link_token(item, hosted=hosted)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
 
+class ReauthComplete(BaseModel):
+    # Present only for Hosted Link (native): lets the server confirm the
+    # browser session actually finished before declaring the item repaired.
+    link_token: str | None = None
+
+
 @router.post("/items/{item_id}/reauth-complete")
-async def reauth_complete(item_id: str, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def reauth_complete(item_id: str, body: ReauthComplete | None = None, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Called after Link's update-mode flow succeeds. The access token is
     unchanged by update mode, so there's nothing to exchange — just clear the
     stored error and pull fresh data to confirm the repair worked."""
@@ -47,6 +67,13 @@ async def reauth_complete(item_id: str, user_id: str = Depends(get_current_user)
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Connection not found")
+    if body and body.link_token:
+        try:
+            finished = plaid_service.hosted_update_completed(body.link_token)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        if not finished:
+            raise HTTPException(status_code=400, detail="The reconnect wasn't completed. Please try again.")
     item.last_sync_error = None
     item.status = "active"
     await db.commit()

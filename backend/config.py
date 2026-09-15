@@ -25,6 +25,10 @@ PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")
 # match a URI registered under Team Settings > API > Allowed redirect URIs
 # in the Plaid dashboard.
 PLAID_REDIRECT_URI = os.getenv("PLAID_REDIRECT_URI", "")
+# Deep link the native (Capacitor) app is sent back to after Plaid Hosted
+# Link finishes in the system browser. Must be registered as an allowed
+# redirect URI in the Plaid dashboard, exactly like PLAID_REDIRECT_URI.
+APP_DEEP_LINK = os.getenv("APP_DEEP_LINK", "budgetbuddy://plaid-return")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
 BUDGET_SYNC_INTERVAL_SECS = int(os.getenv("BUDGET_SYNC_INTERVAL_SECS", "900"))

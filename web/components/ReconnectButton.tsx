@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { RefreshCw, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/auth'
+import { isNative, openInSystemBrowser, closeSystemBrowser, waitForDeepLink } from '@/lib/native'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -20,13 +21,14 @@ export function ReconnectButton({ itemId, onSuccess, className }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const finish = useCallback(async () => {
+  const finish = useCallback(async (hostedLinkToken?: string) => {
     setBusy(true)
     try {
       const token = getToken()
       const res = await fetch(`${BASE}/api/v1/plaid/items/${itemId}/reauth-complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(hostedLinkToken ? { link_token: hostedLinkToken } : {}),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -55,7 +57,8 @@ export function ReconnectButton({ itemId, onSuccess, className }: Props) {
     setError(null)
     try {
       const token = getToken()
-      const res = await fetch(`${BASE}/api/v1/plaid/items/${itemId}/update-token`, {
+      const hosted = isNative()
+      const res = await fetch(`${BASE}/api/v1/plaid/items/${itemId}/update-token${hosted ? '?hosted=true' : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) {
@@ -63,13 +66,22 @@ export function ReconnectButton({ itemId, onSuccess, className }: Props) {
         throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not start reconnect')
       }
       const data = await res.json()
+      if (hosted) {
+        if (!data.hosted_link_url) throw new Error('Hosted Link is not enabled for this Plaid account')
+        const returned = waitForDeepLink('plaid-return')
+        await openInSystemBrowser(data.hosted_link_url)
+        if (!(await returned)) throw new Error('Reconnect was cancelled before finishing.')
+        await closeSystemBrowser()
+        await finish(data.link_token)
+        return
+      }
       setLinkToken(data.link_token)
     } catch (e: any) {
       setError(e.message || 'Could not start reconnect')
     } finally {
       setBusy(false)
     }
-  }, [itemId])
+  }, [itemId, finish])
 
   useEffect(() => { if (ready && linkToken) open() }, [ready, linkToken, open])
 

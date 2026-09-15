@@ -9,7 +9,7 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from backend.config import PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV, PLAID_REDIRECT_URI
+from backend.config import PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV, PLAID_REDIRECT_URI, APP_DEEP_LINK
 from backend.db.models import PlaidItem, BankAccount, Transaction
 
 log = logging.getLogger("services.plaid")
@@ -101,7 +101,31 @@ def _get_client():
     return plaid_api.PlaidApi(plaid.ApiClient(configuration))
 
 
-async def create_link_token(user_id: str) -> str:
+def _apply_redirect(kwargs: dict[str, Any], hosted: bool) -> None:
+    """Web Link needs redirect_uri to come back from a bank's OAuth page.
+    Hosted Link runs in the system browser and instead deep-links back into
+    the native app when the whole session is done — Plaid rejects a request
+    that sets both, so they're mutually exclusive."""
+    if hosted:
+        try:
+            from plaid.model.link_token_create_hosted_link import LinkTokenCreateHostedLink
+            kwargs["hosted_link"] = LinkTokenCreateHostedLink(
+                completion_redirect_uri=APP_DEEP_LINK, is_mobile_app=True,
+            )
+        except ImportError:
+            kwargs["hosted_link"] = {"completion_redirect_uri": APP_DEEP_LINK, "is_mobile_app": True}
+    elif PLAID_REDIRECT_URI:
+        kwargs["redirect_uri"] = PLAID_REDIRECT_URI
+
+
+def _link_response(response: Any) -> dict[str, Any]:
+    return {
+        "link_token": response["link_token"],
+        "hosted_link_url": response.get("hosted_link_url"),
+    }
+
+
+async def create_link_token(user_id: str, hosted: bool = False) -> dict[str, Any]:
     client = _get_client()
     kwargs: dict[str, Any] = dict(
         products=[Products("transactions")],
@@ -120,8 +144,7 @@ async def create_link_token(user_id: str) -> str:
         kwargs["optional_products"] = [_P("liabilities")]
     except Exception:
         pass
-    if PLAID_REDIRECT_URI:
-        kwargs["redirect_uri"] = PLAID_REDIRECT_URI
+    _apply_redirect(kwargs, hosted)
     try:
         request = LinkTokenCreateRequest(**kwargs)
         response = client.link_token_create(request)
@@ -132,11 +155,11 @@ async def create_link_token(user_id: str) -> str:
         kwargs.pop("optional_products", None)
         request = LinkTokenCreateRequest(**kwargs)
         response = client.link_token_create(request)
-    log.info("Created Plaid link token — request_id=%s", response.get("request_id"))
-    return response["link_token"]
+    log.info("Created Plaid link token (hosted=%s) — request_id=%s", hosted, response.get("request_id"))
+    return _link_response(response)
 
 
-async def create_update_link_token(plaid_item: PlaidItem) -> str:
+async def create_update_link_token(plaid_item: PlaidItem, hosted: bool = False) -> dict[str, Any]:
     """Link token for UPDATE MODE — relaunches Link against an existing item so
     the user can re-authorize (renewed consent, fixed credentials, MFA) without
     the item being recreated. Deleting and re-adding a connection cascades away
@@ -152,13 +175,38 @@ async def create_update_link_token(plaid_item: PlaidItem) -> str:
         # existing product set — and access_token identifies the item.
         access_token=plaid_item.access_token,
     )
-    if PLAID_REDIRECT_URI:
-        kwargs["redirect_uri"] = PLAID_REDIRECT_URI
+    _apply_redirect(kwargs, hosted)
     request = LinkTokenCreateRequest(**kwargs)
     response = client.link_token_create(request)
-    log.info("Created Plaid update-mode link token for item %s — request_id=%s",
-             plaid_item.id, response.get("request_id"))
-    return response["link_token"]
+    log.info("Created Plaid update-mode link token for item %s (hosted=%s) — request_id=%s",
+             plaid_item.id, hosted, response.get("request_id"))
+    return _link_response(response)
+
+
+def _hosted_sessions(link_token: str) -> list[Any]:
+    from plaid.model.link_token_get_request import LinkTokenGetRequest
+    client = _get_client()
+    response = client.link_token_get(LinkTokenGetRequest(link_token=link_token))
+    return list(response.get("link_sessions") or [])
+
+
+async def complete_hosted_link(link_token: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
+    """Finish a Hosted Link session for a NEW connection. With Hosted Link the
+    browser never hands the app a public_token — it's fetched afterwards from
+    the session record, then exchanged exactly like the web flow."""
+    for session in _hosted_sessions(link_token):
+        results = session.get("results") or {}
+        for added in results.get("item_add_results") or []:
+            public_token = added.get("public_token")
+            if public_token:
+                return await exchange_public_token(public_token, user_id, db)
+    raise RuntimeError("The bank connection wasn't completed. Please try again.")
+
+
+def hosted_update_completed(link_token: str) -> bool:
+    """Update mode keeps the existing access token, so there's no public_token
+    to exchange — success is just the session having finished cleanly."""
+    return any(session.get("on_success") for session in _hosted_sessions(link_token))
 
 
 async def exchange_public_token(public_token: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
