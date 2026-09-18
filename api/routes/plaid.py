@@ -4,11 +4,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from api.auth import get_current_user
 from backend.db.base import get_session
-from backend.db.models import PlaidItem, BankAccount, DebtAccount
+from backend.db.models import PlaidItem, BankAccount, DebtAccount, Transaction
 from backend.services import plaid_service
 from backend.services.plaid_service import is_manual_item_id, manual_item_filter
 
@@ -173,6 +173,12 @@ async def remove_item(item_id: str, user_id: str = Depends(get_current_user), db
         )
         for debt in debts_result.scalars().all():
             debt.dismissed = True
+        # Explicit bulk delete rather than relying on the FK cascade alone:
+        # deployed databases created before ON DELETE CASCADE was declared on
+        # transactions.account_id would otherwise reject the account delete.
+        await db.execute(
+            delete(Transaction).where(Transaction.account_id.in_(account_ids), Transaction.user_id == user_id)
+        )
 
     await db.delete(item)
     await db.commit()

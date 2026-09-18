@@ -85,7 +85,11 @@ class BankAccount(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     plaid_item = relationship("PlaidItem", back_populates="accounts")
-    transactions = relationship("Transaction", back_populates="account")
+    # passive_deletes: without it, deleting an account makes the ORM try to
+    # orphan its transactions by nulling account_id — which is NOT NULL — so
+    # every disconnect of a synced bank failed. The FK's ON DELETE CASCADE
+    # handles the rows instead.
+    transactions = relationship("Transaction", back_populates="account", passive_deletes=True)
 
 
 class Transaction(Base):
