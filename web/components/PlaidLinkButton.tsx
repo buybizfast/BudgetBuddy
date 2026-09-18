@@ -19,13 +19,17 @@ export function PlaidLinkButton({ onSuccess, className }: Props) {
     onSuccess: async (publicToken) => {
       try {
         const token = getToken()
-        await fetch(`${BASE}/api/v1/plaid/exchange-token`, {
+        const res = await fetch(`${BASE}/api/v1/plaid/exchange-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ public_token: publicToken }),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(typeof err.detail === 'string' ? err.detail : 'Failed to connect account.')
+        }
         onSuccess()
-      } catch { setError('Failed to connect account.') }
+      } catch (e: any) { setError(e?.message || 'Failed to connect account.') }
     },
     onExit: (err, metadata) => {
       if (err) console.error('Plaid Link exit error:', err, 'metadata:', metadata)

@@ -209,6 +209,52 @@ def hosted_update_completed(link_token: str) -> bool:
     return any(session.get("on_success") for session in _hosted_sessions(link_token))
 
 
+class DuplicateConnectionError(Exception):
+    def __init__(self, institution_name: str):
+        self.institution_name = institution_name
+        super().__init__(
+            f"{institution_name} is already connected. Use Reconnect on the existing "
+            f"connection instead of adding it again."
+        )
+
+
+def _account_keys(accounts: list[tuple[str | None, str | None, str | None]]) -> set[tuple[str, str | None]]:
+    """Identity of an account across two Link sessions: Plaid's account_id
+    differs per item, so match on the last-four mask (falling back to the
+    display name when an institution omits masks) plus subtype."""
+    return {(mask or name or "", subtype) for mask, name, subtype in accounts if mask or name}
+
+
+async def _find_duplicate_item(client, user_id: str, institution_id: str | None, access_token: str,
+                               db: AsyncSession) -> Optional[PlaidItem]:
+    """An existing item for this user at the same institution that exposes at
+    least one of the same accounts as the newly linked one."""
+    if not institution_id:
+        return None
+    result = await db.execute(
+        select(PlaidItem).where(
+            PlaidItem.user_id == user_id,
+            PlaidItem.institution_id == institution_id,
+            ~manual_item_filter(),
+        )
+    )
+    candidates = result.scalars().all()
+    if not candidates:
+        return None
+
+    from plaid.model.accounts_get_request import AccountsGetRequest
+    response = client.accounts_get(AccountsGetRequest(access_token=access_token))
+    new_keys = _account_keys([
+        (acct.get("mask"), acct.get("name"), _plaid_str(acct.get("subtype"))) for acct in response["accounts"]
+    ])
+    for item in candidates:
+        result = await db.execute(select(BankAccount).where(BankAccount.plaid_item_id == item.id))
+        existing_keys = _account_keys([(a.mask, a.name, a.subtype) for a in result.scalars().all()])
+        if new_keys & existing_keys:
+            return item
+    return None
+
+
 async def exchange_public_token(public_token: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
     client = _get_client()
     exchange_response = client.item_public_token_exchange(
@@ -238,6 +284,18 @@ async def exchange_public_token(public_token: str, user_id: str, db: AsyncSessio
         existing.institution_name = institution_name
         plaid_item = existing
     else:
+        duplicate = await _find_duplicate_item(client, user_id, institution_id, access_token, db)
+        if duplicate is not None:
+            # Plaid issues a fresh item_id every time Link runs, so linking a
+            # bank twice would double every balance and re-import every
+            # transaction. Release the new item at Plaid (it's billable and
+            # nothing references it) and tell the user to Reconnect instead.
+            try:
+                from plaid.model.item_remove_request import ItemRemoveRequest
+                client.item_remove(ItemRemoveRequest(access_token=access_token))
+            except Exception as exc:
+                log.warning("Could not remove duplicate Plaid item for %s: %s", institution_name, exc)
+            raise DuplicateConnectionError(institution_name)
         plaid_item = PlaidItem(user_id=user_id, item_id=item_id, access_token=access_token,
                                institution_id=institution_id, institution_name=institution_name)
         db.add(plaid_item)

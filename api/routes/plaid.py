@@ -10,7 +10,7 @@ from api.auth import get_current_user
 from backend.db.base import get_session
 from backend.db.models import PlaidItem, BankAccount, DebtAccount, Transaction
 from backend.services import plaid_service
-from backend.services.plaid_service import is_manual_item_id, manual_item_filter
+from backend.services.plaid_service import DuplicateConnectionError, is_manual_item_id, manual_item_filter
 
 router = APIRouter(prefix="/api/v1/plaid", tags=["plaid"])
 
@@ -35,6 +35,8 @@ async def hosted_link_complete(body: HostedLinkComplete, user_id: str = Depends(
     """Called by the native app once it's deep-linked back from Hosted Link."""
     try:
         return await plaid_service.complete_hosted_link(body.link_token, user_id, db)
+    except DuplicateConnectionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -91,6 +93,8 @@ class ExchangeTokenRequest(BaseModel):
 async def exchange_token(body: ExchangeTokenRequest, user_id: str = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     try:
         return await plaid_service.exchange_public_token(body.public_token, user_id, db)
+    except DuplicateConnectionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
